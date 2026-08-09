@@ -1,0 +1,28 @@
+{
+  "campaigns": [
+    {
+      "id": "demo-1",
+      "title": "Honda CG 160 Start 0km",
+      "prize": "Honda CG 160 Start 0km",
+      "type": "numeros",
+      "price": 10,
+      "totalTickets": 100,
+      "status": "ativa",
+      "imageUrl": "",
+      "sold": [
+        13,
+        17,
+        33,
+        64
+      ],
+      "reservations": {
+        "6": {
+          "reservationId": "200203a7-92b3-45b7-b10b-67796a503c85",
+          "expiresAt": 1786288883065
+        }
+      },
+      "createdAt": "2026-08-09T15:03:29.348Z"
+    }
+  ],
+  "payments": []
+}
