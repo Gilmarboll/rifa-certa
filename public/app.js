@@ -69,7 +69,7 @@ $('reserveBtn').onclick=async()=>{
   if(!r.ok){msg.textContent=d.error||'Erro na reserva';await load();return;}
   currentReservation=d;
 $('reserveBtn').disabled=true;
-  selected.clear();
+  
   await load();
   msg.innerHTML=`
     <div><strong>Reserva feita por 15 minutos.</strong><br>Total: ${money(d.total)}</div>
