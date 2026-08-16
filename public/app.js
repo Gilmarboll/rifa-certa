@@ -68,6 +68,7 @@ $('reserveBtn').onclick=async()=>{
   const d=await r.json();
   if(!r.ok){msg.textContent=d.error||'Erro na reserva';await load();return;}
   currentReservation=d;
+$('reserveBtn').disabled=true;
   selected.clear();
   await load();
   msg.innerHTML=`
