@@ -75,7 +75,7 @@ $('reserveBtn').disabled=true;
     <div><strong>Reserva feita por 15 minutos.</strong><br>Total: ${money(d.total)}</div>
     <div style="margin-top:12px">
       <input id="payerName" placeholder="Seu primeiro nome" style="margin-bottom:8px">
-      <input id="payerEmail" type="email" placeholder="Seu e-mail" style="margin-bottom:8px">
+      <input id="payerPhone" type="tel" placeholder="Seu WhatsApp" style="margin-bottom:8px">
       <button id="pixBtn" class="primary">Gerar PIX</button>
     </div>
     <div id="pixArea"></div>`;
@@ -89,7 +89,7 @@ async function createPix(){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       reservationId:currentReservation.reservationId,
-      payer:{first_name:$('payerName').value.trim(),email:$('payerEmail').value.trim()}
+      payer:{first_name:$('payerName').value.trim(),phone:$('payerPhone').value.trim()
     })
   });
   const d=await r.json();
