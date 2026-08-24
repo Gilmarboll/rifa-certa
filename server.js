@@ -118,7 +118,7 @@ async function mpRequest(url,options={}){
   const data=await r.json().catch(()=>({}));
   if(!r.ok){
     const err=new Error(data.message || data.error || `Mercado Pago HTTP ${r.status}`);
-    err.status=r.status; err.details=data; throw err;
+    err.status=r.status; err.details=data;console.error('Mercado Pago:', data); throw err;
   }
   return data;
 }
