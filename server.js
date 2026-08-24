@@ -215,8 +215,8 @@ app.post('/api/payments/pix',(req,res)=>{
       });
     }
 
-    if(!payer.email || !payer.first_name)
-      return res.status(400).json({error:'Nome e e-mail são obrigatórios para gerar o Pix.'});
+    if(!payer.phone || !payer.first_name)
+      return res.status(400).json({error:'Nome e WhatsApp são obrigatórios para gerar o Pix.'});
 
     const idem=crypto.randomUUID();
     const body={
