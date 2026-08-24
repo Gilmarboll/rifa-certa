@@ -89,7 +89,7 @@ async function createPix(){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       reservationId:currentReservation.reservationId,
-      payer:{first_name:$('payerName').value.trim(),phone:$('payerPhone').value.trim()
+      payer:{first_name:$('payerName').value.trim(),phone:$('payerPhone').value.trim()}
     })
   });
   const d=await r.json();
