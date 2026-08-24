@@ -226,7 +226,7 @@ app.post('/api/payments/pix',(req,res)=>{
       total_amount:amount,
       description:`Rifa Certa - ${campaign.title}`,
       payer:{
-        email:payer.email,
+        email:process.env.MP_PAYER_EMAIL,
         first_name:payer.first_name,
         ...(payer.last_name?{last_name:payer.last_name}:{})
       },
