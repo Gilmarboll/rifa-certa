@@ -96,7 +96,7 @@ function validMPWebhook(req){
   const sig=parseSignature(req.headers['x-signature']||'');
   if(!sig.ts || !sig.v1) return false;
   const requestId=req.headers['x-request-id'];
-  const rawDataId=(req.query['data.id'] || req.body?.data?.id || '').toString();
+  const rawDataId=(req.query['data.id'] || req.body?.data?.[0]?.id || req.body?.data?.id || '').toString();
   const dataId=rawDataId ? rawDataId.toLowerCase() : '';
   let manifest='';
   if(dataId) manifest += `id:${dataId};`;
