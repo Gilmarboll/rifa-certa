@@ -242,7 +242,7 @@ app.post('/api/payments/pix',(req,res)=>{
       method:'POST',
       headers:{'X-Idempotency-Key':idem},
       body:JSON.stringify(body)
-    });console.log('ORDER ID:',order.id);
+    });
     const payment=order.transactions?.payments?.[0]||{};
     const pm=payment.payment_method||{};
 
