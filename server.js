@@ -286,7 +286,7 @@ app.post('/api/webhooks/mercadopago',(req,res)=>{
   (async()=>{
     if(!validMPWebhook(req)) return res.sendStatus(401);
 
-    const orderId=(req.query['data.id'] || req.body?.data?.id || '').toString();
+    const orderId=(req.query['data.id'] || req.body?.data?.[0]?.id || req.body?.data?.id || '').toString();
     if(!orderId) return res.sendStatus(200);
 
     const order=await mpRequest(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}`);
