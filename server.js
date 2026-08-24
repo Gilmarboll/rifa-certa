@@ -289,7 +289,7 @@ app.post('/api/webhooks/mercadopago',(req,res)=>{
     const orderId=(req.query['data.id'] || req.body?.data?.[0]?.id || req.body?.data?.id || '').toString();
     if(!orderId) return res.sendStatus(200);
 
-    const order=await mpRequest(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}`);
+    const order=await mpRequest('https://api.mercadopago.com/v1/orders/'+encodeURIComponent(orderId));
     const db=load();
 
     const paymentRow=db.payments.find(p=>p.providerOrderId===order.id);
