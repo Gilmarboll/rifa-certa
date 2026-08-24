@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
-
+const { Pool } = require('pg');
 const app = express();
 app.use(express.json({limit:'2mb'}));
 app.use(express.static(path.join(__dirname,'public')));
@@ -13,6 +13,7 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'troque-esta-senha';
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || '';
 const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET || '';
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const sessions = new Map();
 
 const uploadDir = path.join(__dirname,'uploads');
@@ -320,5 +321,14 @@ app.post('/api/campaign/:id/demo-confirm',(req,res)=>{
   save(db);
   res.json({ok:true,numbers:finalized.numbers});
 });
-
-app.listen(3000,()=>console.log('Rifa Certa v0.5 em http://localhost:3000'));
+async function initDatabase(){
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_state (
+      id INTEGER PRIMARY KEY,
+      data JSONB NOT NULL
+    )
+  `);
+}
+initDatabase().then(()=>{
+  app.listen(3000,()=>console.log('Rifa Certa v0.5 em http://localhost:3000'));
+});
