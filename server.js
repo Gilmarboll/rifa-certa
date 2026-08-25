@@ -40,7 +40,7 @@ function initial(){
     totalTickets:100,
     status:'ativa',
     imageUrl:'',
-    sold:[13,17,33,64,63],
+    sold:[13,17,33,64],
     reservations:{},
     createdAt:new Date().toISOString()
   }], payments:[]};
