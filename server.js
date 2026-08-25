@@ -164,6 +164,7 @@ app.get('/api/admin/campaigns',requireAdmin,(req,res)=>{
   const db=load(); db.campaigns.forEach(clean); save(db);
   res.json(db.campaigns.map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
 });
+app.get('/api/admin/payments',requireAdmin,(req,res)=>{ const db=load(); res.json(db.payments||[]); });
 app.post('/api/admin/campaigns',requireAdmin,(req,res)=>{
   const {title,prize,type='numeros',price,totalTickets,imageUrl=''}=req.body;
   if(!title||!prize||!Number(price)||!Number(totalTickets))
