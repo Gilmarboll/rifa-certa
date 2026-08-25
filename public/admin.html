@@ -13,7 +13,7 @@
 <label>Foto do prêmio<input id="image" type="file" accept="image/jpeg,image/png,image/webp"></label>
 <label>Valor por número<input name="price" type="number" min="0.01" step="0.01" required></label><label>Quantidade<input name="totalTickets" type="number" min="1" max="10000" required></label>
 <button class="primary">Criar campanha</button></form><div id="msg" class="msg"></div></div>
-<aside class="cart"><h2>Campanhas</h2><div id="campaigns"></div></aside></section></div></main>
+<aside class="cart"><h2>Campanhas</h2><div id="campaigns"></div></aside><aside class="cart"><h2>Pagamentos</h2><div id="payments"></div></aside></section></div></main>
 <script>
 let token=localStorage.getItem('rc_admin_token')||'';
 const auth=()=>({'Content-Type':'application/json','Authorization':'Bearer '+token});
@@ -22,7 +22,12 @@ function showLogin(){loginBox.style.display='block';adminApp.style.display='none
 loginForm.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(loginForm));const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});const d=await r.json();if(!r.ok)return loginMsg.textContent=d.error;token=d.token;localStorage.setItem('rc_admin_token',token);loginMsg.textContent='';check();};
 logout.onclick=async()=>{await fetch('/api/admin/logout',{method:'POST',headers:auth()});token='';localStorage.removeItem('rc_admin_token');showLogin();};
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-async function refresh(){const cs=await fetch('/api/admin/campaigns',{headers:auth()}).then(r=>r.json());campaigns.innerHTML=cs.map(c=>`<div class="admin-card"><strong>${c.title}</strong><br><span>${c.type} • ${c.sold.length}/${c.totalTickets} vendidos • ${c.status}</span><br><b>${money(c.price)}</b><div style="margin-top:8px"><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button> <button class="secondary" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></div>`).join('');}
+{consasync function refresh()t cs=await fetch('/api/admin/campaigns',{headers:auth()}).then(r=>r.json());campaigns.innerHTML=cs.map(c=>`<div class="admin-card"><strong>${c.title}</strong><br><span>${c.type} • ${c.sold.length}/${c.totalTickets} vendidos • ${c.status}</span><br><b>${money(c.price)}</b><div style="margin-top:8px"><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button> <button class="secondary" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></div>`).join('');
+onst ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
+document.getElementById('payments').innerHTML=ps.length
+?ps.slice().reverse().map(p=><div class="admin-card"><strong>${money(p.amount)}</strong><br>${p.status||'-'}<br>Números: ${(p.numbers||[]).join(', ')}</div>).join('')
+:'<p>Nenhum pagamento.</p>';
+}
 async function statusChange(id,status){await fetch('/api/admin/campaign/'+id+'/status',{method:'PATCH',headers:auth(),body:JSON.stringify({status})});refresh();}
 form.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(form));delete o.image; if(image.files[0]){const fd=new FormData();fd.append('image',image.files[0]);const ur=await fetch('/api/admin/upload',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});const ud=await ur.json();if(!ur.ok){msg.textContent=ud.error||'Erro no upload';return;}o.imageUrl=ud.url;}const r=await fetch('/api/admin/campaigns',{method:'POST',headers:auth(),body:JSON.stringify(o)});const d=await r.json();msg.textContent=r.ok?'Campanha criada com sucesso!':d.error;if(r.ok){form.reset();refresh();}};
 check();
