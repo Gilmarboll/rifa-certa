@@ -23,7 +23,7 @@ loginForm.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new F
 logout.onclick=async()=>{await fetch('/api/admin/logout',{method:'POST',headers:auth()});token='';localStorage.removeItem('rc_admin_token');showLogin();};
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 async function refresh(){const cs=await fetch('/api/admin/campaigns',{headers:auth()}).then(r=>r.json());campaigns.innerHTML=cs.map(c=>`<div class="admin-card"><strong>${c.title}</strong><br><span>${c.type} • ${c.sold.length}/${c.totalTickets} vendidos • ${c.status}</span><br><b>${money(c.price)}</b><div style="margin-top:8px"><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button> <button class="secondary" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></div>`).join('');
-onst ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
+const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 document.getElementById('payments').innerHTML=ps.length
 ?ps.slice().reverse().map(p=><div class="admin-card"><strong>${money(p.amount)}</strong><br>${p.status||'-'}<br>Números: ${(p.numbers||[]).join(', ')}</div>).join('')
 :'<p>Nenhum pagamento.</p>';
