@@ -40,18 +40,23 @@ function initial(){
     totalTickets:100,
     status:'ativa',
     imageUrl:'',
-    sold:[13,17,33,64],
+    sold:[13,17,33,64,63],
     reservations:{},
     createdAt:new Date().toISOString()
   }], payments:[]};
 }
-function load(){
-  if(!fs.existsSync(DB)) fs.writeFileSync(DB,JSON.stringify(initial(),null,2));
-  const db = JSON.parse(fs.readFileSync(DB));
-  if(!Array.isArray(db.payments)) db.payments=[];
-  return db;
+let state = initial();
+function load(){ return state; }
+
+  
+
+function save(db){
+  state=db;
+  pool.query(
+    'INSERT INTO app_state (id,data) VALUES (1,$1) ON CONFLICT (id) DO UPDATE SET data=EXCLUDED.data',
+    [db]
+  ).catch(err=>console.error('DB save error',err));
 }
-function save(db){ fs.writeFileSync(DB,JSON.stringify(db,null,2)); }
 function clean(c){
   const now=Date.now();
   for(const [n,r] of Object.entries(c.reservations||{})){
@@ -328,6 +333,12 @@ async function initDatabase(){
       data JSONB NOT NULL
     )
   `);
+const result = await pool.query('SELECT data FROM app_state WHERE id=1');
+if(result.rows.length){
+  state = result.rows[0].data;
+}else{
+  await pool.query('INSERT INTO app_state (id,data) VALUES (1,$1)', [state]);
+}
 }
 initDatabase().then(()=>{
   app.listen(3000,()=>console.log('Rifa Certa v0.5 em http://localhost:3000'));
