@@ -25,7 +25,7 @@ const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'
 async function refresh(){const cs=await fetch('/api/admin/campaigns',{headers:auth()}).then(r=>r.json());campaigns.innerHTML=cs.map(c=>`<div class="admin-card"><strong>${c.title}</strong><br><span>${c.type} • ${c.sold.length}/${c.totalTickets} vendidos • ${c.status}</span><br><b>${money(c.price)}</b><div style="margin-top:8px"><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button> <button class="secondary" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></div>`).join('');
 const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 document.getElementById('payments').innerHTML=ps.length
-?ps.slice().reverse().map(p=><div class="admin-card"><strong>${money(p.amount)}</strong><br>${p.status||'-'}<br>Números: ${(p.numbers||[]).join(', ')}</div>).join('')
+?ps.slice().reverse().map(p=>`<div class="admin-card"><strong>${money(p.amount)}</strong><br>${p.status||'-'}<br>Números: ${(p.numbers||[]).join(', ')}</div>).join('')
 :'<p>Nenhum pagamento.</p>';
 }
 async function statusChange(id,status){await fetch('/api/admin/campaign/'+id+'/status',{method:'PATCH',headers:auth(),body:JSON.stringify({status})});refresh();}
