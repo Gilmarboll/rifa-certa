@@ -257,7 +257,7 @@ app.post('/api/payments/pix',(req,res)=>{
       id:crypto.randomUUID(),
       reservationId,
       campaignId:campaign.id,
-numbers: findReservation(db,reservationId)?.numbers || [],
+numbers: findReservation(db,reservationId)?.numbers || [],name:payer.first_name,phone:payer.phone,
       provider:'mercadopago',
       providerOrderId:order.id,
       amount:Number(amount),
