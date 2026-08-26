@@ -103,7 +103,7 @@ function validMPWebhook(req){
   if(!sig.ts || !sig.v1) return false;
   const requestId=req.headers['x-request-id'];
   const rawDataId=(req.query['data.id'] || req.body?.data?.[0]?.id || req.body?.data?.id || '').toString();
-  const dataId=rawDataId || '';
+  const dataId=(rawDataId || '').toLowerCase();
   let manifest='';
   if(dataId) manifest += `id:${dataId};`;
   if(requestId) manifest += `request-id:${requestId};`;
