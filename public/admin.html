@@ -27,7 +27,7 @@ const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 
 
 
-document.getElementById('payments').innerHTML=ps.length?ps.map(p=>'<div class="admin-card"><strong>'+money(p.amount)+'</strong><br>Status: '+(p.status||'-')+'<br>Números: '+(p.numbers||[]).join(', ')+'<br>Nome: '+(p.name||'-')+'<br>WhatsApp: '+(p.phone||'-')+'</div>').join(''):'<p>Nenhum pagamento.</p>';
+document.getElementById('payments').innerHTML=ps.length?ps.map(p=>'<div class="admin-card"><strong>'+money(p.amount)+'</strong><br>Status: '+(p.status==='processed'?'PAGO':(p.status||'-'))+'<br>Números: '+(p.numbers||[]).join(', ')+'<br>Nome: '+(p.name||'-')+'<br>WhatsApp: '+(p.phone||'-')+'</div>').join(''):'<p>Nenhum pagamento.</p>';
 }
 form.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(form));delete o.image; if(image.files[0]){const fd=new FormData();fd.append('image',image.files[0]);const ur=await fetch('/api/admin/upload',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});const ud=await ur.json();if(!ur.ok){msg.textContent=ud.error||'Erro no upload';return;}o.imageUrl=ud.url;}const r=await fetch('/api/admin/campaigns',{method:'POST',headers:auth(),body:JSON.stringify(o)});const d=await r.json();msg.textContent=r.ok?'Campanha criada com sucesso!':d.error;if(r.ok){form.reset();refresh();}};
 check();
