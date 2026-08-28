@@ -21,12 +21,13 @@ async function load(){
   $('progress').textContent=`${campaign.sold.length} vendidos de ${campaign.totalTickets}`;
   draw();
 }
+const grupos=[['Avestruz','🐦'],['Águia','🦅'],['Burro','🫏'],['Borboleta','🦋'],['Cachorro','🐶'],['Cabra','🐐'],['Carneiro','🐏'],['Camelo','🐪'],['Cobra','🐍'],['Coelho','🐰'],['Cavalo','🐴'],['Elefante','🐘'],['Galo','🐓'],['Gato','🐱'],['Jacaré','🐊'],['Leão','🦁'],['Macaco','🐒'],['Porco','🐷'],['Pavão','🦚'],['Peru','🦃'],['Touro','🐂'],['Tigre','🐯'],['Urso','🐻'],['Veado','🦌'],['Vaca','🐄']];
 function draw(){
   const grid=$('grid'); grid.innerHTML='';
   for(let n=1;n<=campaign.totalTickets;n++){
     const b=document.createElement('button');
-    b.className='ticket';
-    b.textContent=campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(2,'0');
+    b.className='ticket';if(campaign.type==='grupo'){const g=grupos[n-1];const inicio=(n-1)*4+1;const nums=[inicio,inicio+1,inicio+2,inicio+3].map(x=>String(x%100).padStart(2,'0'));b.innerHTML='<strong>'+g[0]+' '+g[1]+'</strong><br><small>Grupo '+String(n).padStart(2,'0')+'</small><br>'+nums.join(' • ');}
+    if(campaign.type!=='grupo') b.textContent=campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(2,'0');
     if(campaign.sold.includes(n)) b.classList.add('sold');
     else if(campaign.reservations.includes(n)) b.classList.add('reserved');
     else if(selected.has(n)) b.classList.add('selected');
