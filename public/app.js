@@ -31,7 +31,14 @@ grid.style.gap = '10px';
     b.className='ticket';if(campaign.type==='grupo'){
   b.style.minHeight='120px';
   b.style.padding='8px';
-}if(campaign.type==='grupo'){const g=grupos[n-1];const inicio=(n-1)*4+1;const nums=[inicio,inicio+1,inicio+2,inicio+3].map(x=>String(x%100).padStart(2,'0'));b.innerHTML='<strong>'+g[0]+' '+g[1]+'</strong><br><small>Grupo '+String(n).padStart(2,'0')+'</small><br>'+nums.join(' • ');}
+}
+if(campaign.type==='grupo'){
+
+  const g=grupos[n-1];
+  const inicio=(n-1)*4+1;
+  const nums=[inicio,inicio+1,inicio+2,inicio+3].map(x=>String(x%100).padStart(2,'0'));
+  b.innerHTML='<strong>'+g[0]+'</strong><span style="font-size:42px;display:block;margin:8px 0">'+g[1]+'</span><small>Grupo '+String(n).padStart(2,'0')+'</small><br>'+nums.join(' • ');
+}
     if(campaign.type!=='grupo') b.textContent=campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(2,'0');
     if(campaign.sold.includes(n)) b.classList.add('sold');
     else if(campaign.reservations.includes(n)) b.classList.add('reserved');
