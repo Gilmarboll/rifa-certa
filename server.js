@@ -11,6 +11,7 @@ app.use(express.static(path.join(__dirname,'public')));
 const DB = path.join(__dirname,'data.json');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'troque-esta-senha';
+const ADMIN_TOKEN = crypto.createHash('sha256').update(ADMIN_USER+':'+ADMIN_PASSWORD).digest('hex');
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || '';
 const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET || '';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -66,7 +67,7 @@ function clean(c){
 function tokenFrom(req){ return (req.headers.authorization||'').replace(/^Bearer\s+/,''); }
 function requireAdmin(req,res,next){
   const t=tokenFrom(req);
-  if(!sessions.has(t)) return res.status(401).json({error:'Faça login no painel.'});
+  if(t!==ADMIN_TOKEN) return res.status(401).json({error:'Faça login no painel.'});
   next();
 }
 function findReservation(db,reservationId){
@@ -104,6 +105,7 @@ function validMPWebhook(req){
   const requestId=req.headers['x-request-id'];
   const rawDataId=(req.query['data.id'] || req.body?.data?.[0]?.id || req.body?.data?.id || '').toString();
   const dataId=(rawDataId || '').toLowerCase();
+
   let manifest='';
   if(dataId) manifest += `id:${dataId};`;
   if(requestId) manifest += `request-id:${requestId};`;
@@ -133,7 +135,7 @@ app.post('/api/admin/login',(req,res)=>{
   const {user,password}=req.body||{};
   if(user!==ADMIN_USER || password!==ADMIN_PASSWORD)
     return res.status(401).json({error:'Usuário ou senha inválidos.'});
-  const token=crypto.randomBytes(32).toString('hex');
+  const token=ADMIN_TOKEN;
   sessions.set(token,{createdAt:Date.now()});
   res.json({token,user});
 });
