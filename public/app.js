@@ -26,7 +26,7 @@ function draw(){
   for(let n=1;n<=campaign.totalTickets;n++){
     const b=document.createElement('button');
     b.className='ticket';
-    b.textContent=String(n).padStart(2,'0');
+    b.textContent=String(n).padStart(campaign.type==='centena'?3:2,'0');
     if(campaign.sold.includes(n)) b.classList.add('sold');
     else if(campaign.reservations.includes(n)) b.classList.add('reserved');
     else if(selected.has(n)) b.classList.add('selected');
