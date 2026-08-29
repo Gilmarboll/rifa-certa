@@ -13,8 +13,39 @@
 <label>Foto do prêmio<input id="image" type="file" accept="image/jpeg,image/png,image/webp"></label>
 <label>Valor por número<input name="price" type="number" min="0.01" step="0.01" required></label><label>Quantidade<input name="totalTickets" type="number" min="1" max="10000" required></label>
 <button class="primary">Criar campanha</button></form><div id="msg" class="msg"></div></div>
-<aside class="cart"><h2>Campanhas</h2><div id="campaigns"></div></aside><aside class="cart"><h2>Pagamentos</h2><div id="payments"></div></aside></section></div></main>
-<script>
+<aside class="cart"><h2>Campanhas</h2><div id="campaigns"></div>
+</aside><aside class="cart">
+<h2>Venda manual</h2>
+
+<form id="manualSaleForm">
+<label>Rifa
+<select id="manualCampaign" required></select>
+</label>
+
+<label>Nome do cliente
+<input id="manualName" required>
+</label>
+
+<label>WhatsApp
+<input id="manualPhone">
+</label>
+
+<label>Número / Grupo / Dezena / Centena
+<input id="manualNumber" required>
+</label>
+
+<label>Forma de pagamento
+<select id="manualPayment">
+<option value="dinheiro">Dinheiro</option>
+<option value="pix">PIX</option>
+</select>
+</label>
+
+<button class="primary" type="submit">Marcar PAGO / VENDIDO</button>
+</form>
+
+<div id="manualMsg" class="msg"></div>
+</aside><aside class="cart"><h2>Pagamentos</h2><div id="payments"></div></aside></section></div></main><script>
 let token=localStorage.getItem('rc_admin_token')||'';
 const auth=()=>({'Content-Type':'application/json','Authorization':'Bearer '+token});
 async function check(){if(!token)return showLogin();const r=await fetch('/api/admin/me',{headers:auth()});if(!r.ok){token='';localStorage.removeItem('rc_admin_token');return showLogin();}loginBox.style.display='none';adminApp.style.display='block';logout.style.display='inline-block';refresh();}
