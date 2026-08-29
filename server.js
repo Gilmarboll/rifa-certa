@@ -167,6 +167,33 @@ app.get('/api/admin/campaigns',requireAdmin,(req,res)=>{
   res.json(db.campaigns.map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
 });
 app.get('/api/admin/payments',requireAdmin,(req,res)=>{ const db=load(); res.json(db.payments||[]); });
+app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
+  const {campaignId,name,phone,number,paymentMethod}=req.body;
+  const n=Number(number);
+  const db=load();
+  const c=db.campaigns.find(x=>x.id===campaignId);
+
+  if(!c) return res.status(404).json({error:'Rifa não encontrada.'});
+  if(!n || n<1 || n>c.totalTickets) return res.status(400).json({error:'Número inválido.'});
+  if(c.sold.includes(n)) return res.status(409).json({error:'Já vendido.'});
+
+  c.sold.push(n);
+  db.payments=db.payments||[];
+  db.payments.push({
+    id:crypto.randomUUID(),
+    campaignId,
+    numbers:[n],
+    name:name||'',
+    phone:phone||'',
+    amount:c.price,
+    status:'processed',
+    paymentMethod:paymentMethod||'dinheiro',
+    createdAt:new Date().toISOString()
+  });
+
+  save(db);
+  res.json({ok:true});
+});
 app.post('/api/admin/campaigns',requireAdmin,(req,res)=>{
   const {title,prize,type='numeros',price,totalTickets,imageUrl=''}=req.body;
   if(!title||!prize||!Number(price)||!Number(totalTickets))
