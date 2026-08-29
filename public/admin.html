@@ -62,5 +62,31 @@ document.getElementById('payments').innerHTML=ps.length?ps.map(p=>'<div class="a
 }
 async function statusChange(id,status){const r=await fetch('/api/admin/campaign/'+id+'/status',{method:'PATCH',headers:auth(),body:JSON.stringify({status})});if(r.ok)refresh();}
 form.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(form));delete o.image; if(image.files[0]){const fd=new FormData();fd.append('image',image.files[0]);const ur=await fetch('/api/admin/upload',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});const ud=await ur.json();if(!ur.ok){msg.textContent=ud.error||'Erro no upload';return;}o.imageUrl=ud.url;}const r=await fetch('/api/admin/campaigns',{method:'POST',headers:auth(),body:JSON.stringify(o)});const d=await r.json();msg.textContent=r.ok?'Campanha criada com sucesso!':d.error;if(r.ok){form.reset();refresh();}};
+manualSaleForm.onsubmit=async e=>{
+  e.preventDefault();
+
+  const body={
+    campaignId:manualCampaign.value,
+    name:manualName.value.trim(),
+    phone:manualPhone.value.trim(),
+    number:manualNumber.value,
+    paymentMethod:manualPayment.value
+  };
+
+  const r=await fetch('/api/admin/manual-sale',{
+    method:'POST',
+    headers:auth(),
+    body:JSON.stringify(body)
+  });
+
+  const d=await r.json();
+
+  manualMsg.textContent=r.ok?'Venda registrada como PAGA / VENDIDA':d.error;
+
+  if(r.ok){
+    manualSaleForm.reset();
+    refresh();
+  }
+};
 check();
 </script></body></html>
