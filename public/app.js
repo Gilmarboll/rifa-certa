@@ -24,7 +24,7 @@ async function load(){
 const grupos=[['Avestruz','🐦'],['Águia','🦅'],['Burro','🫏'],['Borboleta','🦋'],['Cachorro','🐶'],['Cabra','🐐'],['Carneiro','🐏'],['Camelo','🐪'],['Cobra','🐍'],['Coelho','🐰'],['Cavalo','🐴'],['Elefante','🐘'],['Galo','🐓'],['Gato','🐱'],['Jacaré','🐊'],['Leão','🦁'],['Macaco','🐒'],['Porco','🐷'],['Pavão','🦚'],['Peru','🦃'],['Touro','🐂'],['Tigre','🐯'],['Urso','🐻'],['Veado','🦌'],['Vaca','🐄']];
 function draw(){
   const grid=$('grid'); grid.innerHTML='';
-grid.style.gridTemplateColumns = campaign.type==='grupo' ? 'repeat(3, minmax(180px,1fr))' : 'repeat(10,1fr)';
+grid.style.gridTemplateColumns = campaign.type==='grupo' ? 'repeat(3, minmax(180abriupx,1fr))' : 'repeat(10,1fr)';
 grid.style.gap = '10px';
   for(let n=1;n<=campaign.totalTickets;n++){
     const b=document.createElement('button');
@@ -49,9 +49,18 @@ b.innerHTML=
 }
  
     if(campaign.type!=='grupo') b.textContent=campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(2,'0');
-    if(campaign.sold.includes(n)) b.classList.add('sold');
-    else if(campaign.reservations.includes(n)) b.classList.add('reserved');
-    else if(selected.has(n)) b.classList.add('selected');
+    if(campaign.sold.includes(n)){
+  b.classList.add('sold');
+  if(campaign.type==='grupo') b.innerHTML += '<span style="display:block;font-weight:bold;margin-top:8px">VENDIDO</span>';
+}
+else if(campaign.reservations.includes(n)){
+  b.classList.add('reserved');
+  if(campaign.type==='grupo') b.innerHTML += '<span style="display:block;font-weight:bold;margin-top:8px">RESERVADO</span>';
+}
+else if(selected.has(n)){
+  b.classList.add('selected');
+  if(campaign.type==='grupo') b.innerHTML += '<span style="display:block;font-weight:bold;margin-top:8px">SELECIONADO</span>';
+}
     b.onclick=()=>{
       if(b.classList.contains('sold')||b.classList.contains('reserved')) return;
       selected.has(n)?selected.delete(n):selected.add(n);
