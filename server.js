@@ -195,14 +195,17 @@ app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
   res.json({ok:true});
 });
 app.post('/api/admin/campaigns',requireAdmin,(req,res)=>{
- const {title,prize,type='numeros',price,totalTickets,imageUrl='',time}=req.body;
+ const {title,prize,type='numeros',price,totalTickets,imageUrl='',time,maxPrizePosition='1',prize1='0',prize2='0',prize3='0',prize4='0',prize5='0'}=req.body;
   if(!title||!prize||!Number(price)||!Number(totalTickets))
     return res.status(400).json({error:'Preencha os campos obrigatórios.'});
   const db=load();
   const c={
     id:crypto.randomUUID(),title,prize,type,price:Number(price),
     totalTickets:Number(totalTickets),status:'ativa',sold:[],
-   reservations:{},imageUrl,time,createdAt:new Date().toISOString()
+   reservations:{},imageUrl,time,
+maxPrizePosition:Number(maxPrizePosition),
+prizes:[Number(prize1||0),Number(prize2||0),Number(prize3||0),Number(prize4||0),Number(prize5||0)],
+createdAt:new Date().toISOString()
   };
   db.campaigns.push(c); save(db); res.json(c);
 });
@@ -225,6 +228,10 @@ app.post('/api/admin/results',requireAdmin,(req,res)=>{
 
   campaigns.forEach(c=>{
     cleanResults.forEach((result,pos)=>{
+if(pos+1 > Number(c.maxPrizePosition||1)) return;
+
+const prizeAmount=Number((c.prizes||[])[pos]||0);
+if(prizeAmount<=0) return;
       const dezena=Number(result.slice(-2));
       const centena=Number(result.slice(-3));
       const grupo=dezena===0 ? 25 : Math.ceil(dezena/4);
@@ -247,6 +254,7 @@ app.post('/api/admin/results',requireAdmin,(req,res)=>{
             campaign:c.title,
             type:c.type,
             winningNumber,
+           prizeAmount,
             name:p.name||'',
             phone:p.phone||''
           });

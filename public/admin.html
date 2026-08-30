@@ -12,6 +12,35 @@
 <label>Tipo<select name="type"><option value="numeros">Números</option><option value="dezena">Dezena</option><option value="centena">Centena</option><option value="grupo">Grupo</option></select></label><label>Horário
 <input name="time" type="time" required>
 </label>
+<label>Até qual posição vale?
+<select name="maxPrizePosition" required>
+<option value="1">Só 1º prêmio</option>
+<option value="2">1º e 2º</option>
+<option value="3">1º ao 3º</option>
+<option value="4">1º ao 4º</option>
+<option value="5">1º ao 5º</option>
+</select>
+</label>
+
+<label>1º prêmio R$
+<input name="prize1" type="number" min="0" step="0.01">
+</label>
+
+<label>2º prêmio R$
+<input name="prize2" type="number" min="0" step="0.01">
+</label>
+
+<label>3º prêmio R$
+<input name="prize3" type="number" min="0" step="0.01">
+</label>
+
+<label>4º prêmio R$
+<input name="prize4" type="number" min="0" step="0.01">
+</label>
+
+<label>5º prêmio R$
+<input name="prize5" type="number" min="0" step="0.01">
+</label>
 <label>Foto do prêmio<input id="image" type="file" accept="image/jpeg,image/png,image/webp"></label>
 <label>Valor por número<input name="price" type="number" min="0.01" step="0.01" required></label><label>Quantidade<input name="totalTickets" type="number" min="1" max="10000" required></label>
 <button class="primary">Criar campanha</button></form><div id="msg" class="msg"></div></div>
@@ -122,7 +151,7 @@ saveResults.onclick=async()=>{
 if(r.ok){
   resultMessage.textContent=d.winners.length
     ? '🏆 GANHADORES\n\n'+d.winners.map(w=>
-  w.position+'º - '+w.campaign+'\n'+w.name+' - '+w.phone+'\nNúmero: '+w.winningNumber
+  w.position+'º - '+w.campaign+'\n'+w.name+' - '+w.phone+'\nNúmero: '+w.winningNumber+'\nPrêmio: R$ '+Number(w.prizeAmount||0).toFixed(2).replace('.',',')
 ).join('\n\n')
     : 'Resultado salvo. Nenhum ganhador.';
 }else{
