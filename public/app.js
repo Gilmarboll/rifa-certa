@@ -45,13 +45,13 @@ b.style.fontSize='16px';
 b.innerHTML=
   '<strong style="font-size:18px">'+g[0]+'</strong>'+
   '<span style="font-size:70px;display:block;margin:15px 0">'+g[1]+'</span>'+
- '<div style="font-size:18px;font-weight:bold">'+nums.join(' - ')+'</div>';
+ '<div style="font-size:14px;font-weight:bold;white-space:nowrap">'+nums.join(' ')+'</div>';
 }
  
     if(campaign.type!=='grupo') b.textContent=campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(2,'0');
     if(campaign.sold.includes(n)){
   b.classList.add('sold');
-  if(campaign.type==='grupo') b.querySelector('span').insertAdjacentHTML('beforebegin','<span style="display:block;font-weight:bold;margin:4px 0">VENDIDO</span>');
+  if(campaign.type==='grupo') b.insertAdjacentHTML('beforeend','<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:white;color:#111;padding:4px 8px;border-radius:6px;font-weight:bold;z-index:2;white-space:nowrap">VENDIDO</span>');
 }
 else if(campaign.reservations.includes(n)){
   b.classList.add('reserved');
