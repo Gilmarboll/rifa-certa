@@ -55,7 +55,7 @@ b.innerHTML=
 }
 else if(campaign.reservations.includes(n)){
   b.classList.add('reserved');
-  if(campaign.type==='grupo') b.innerHTML += '<span style="display:block;font-weight:bold;margin-top:8px">RESERVADO</span>';
+if(campaign.type==='grupo') b.insertAdjacentHTML('beforeend','<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:white;color:#111;padding:4px 8px;border-radius:6px;font-weight:bold;z-index:2;white-space:nowrap">RESERVADO</span>');
 }
 else if(selected.has(n)){
   b.classList.add('selected');
