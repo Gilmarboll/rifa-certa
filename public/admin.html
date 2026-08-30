@@ -157,7 +157,11 @@ saveResults.onclick=async()=>{
 if(r.ok){
   resultMessage.textContent=d.winners.length
     ? '🏆 GANHADORES\n\n'+d.winners.map(w=>
-  w.position+'º - '+w.campaign+'\n'+w.name+' - '+w.phone+'\nNúmero: '+w.winningNumber+'\nPrêmio: R$ '+Number(w.prizeAmount||0).toFixed(2).replace('.',',')
+  w.position+'º - '+w.campaign+'\n'+w.name+' - '+w.phone+'\n'+
+(w.type==='centena'?'Centena: '+String(w.winningNumber).padStart(3,'0'):
+ w.type==='dezena'?'Dezena: '+String(w.winningNumber).padStart(2,'0'):
+ w.type==='grupo'?'Grupo: '+String(w.winningNumber).padStart(2,'0'):
+ 'Número: '+w.winningNumber)+'\nPrêmio: R$ '+Number(w.prizeAmount||0).toFixed(2).replace('.',',')
 ).join('\n\n')
     : 'Resultado salvo. Nenhum ganhador.';
 }else{
