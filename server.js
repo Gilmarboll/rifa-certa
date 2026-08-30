@@ -195,16 +195,83 @@ app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
   res.json({ok:true});
 });
 app.post('/api/admin/campaigns',requireAdmin,(req,res)=>{
-  const {title,prize,type='numeros',price,totalTickets,imageUrl=''}=req.body;
+ const {title,prize,type='numeros',price,totalTickets,imageUrl='',time}=req.body;
   if(!title||!prize||!Number(price)||!Number(totalTickets))
     return res.status(400).json({error:'Preencha os campos obrigatórios.'});
   const db=load();
   const c={
     id:crypto.randomUUID(),title,prize,type,price:Number(price),
     totalTickets:Number(totalTickets),status:'ativa',sold:[],
-    reservations:{},imageUrl,createdAt:new Date().toISOString()
+   reservations:{},imageUrl,time,createdAt:new Date().toISOString()
   };
   db.campaigns.push(c); save(db); res.json(c);
+});
+app.post('/api/admin/results',requireAdmin,(req,res)=>{
+  const {time,results=[]}=req.body;
+
+  if(!time || !results.length){
+    return res.status(400).json({error:'Informe o horário e pelo menos 1 resultado.'});
+  }
+
+  const db=load();
+
+  const cleanResults=results
+    .map(x=>String(x).replace(/\D/g,'').padStart(4,'0').slice(-4));
+
+  const campaigns=(db.campaigns||[]).filter(c=>c.time===time);
+  const payments=(db.payments||[]).filter(p=>p.status==='processed');
+
+  const winners=[];
+
+  campaigns.forEach(c=>{
+    cleanResults.forEach((result,pos)=>{
+      const dezena=Number(result.slice(-2));
+      const centena=Number(result.slice(-3));
+      const grupo=dezena===0 ? 25 : Math.ceil(dezena/4);
+
+      let winningNumber=null;
+
+      if(c.type==='grupo') winningNumber=grupo;
+      if(c.type==='dezena') winningNumber=dezena===0 ? 100 : dezena;
+      if(c.type==='centena') winningNumber=centena===0 ? 1000 : centena;
+
+      if(winningNumber===null) return;
+
+      payments
+        .filter(p=>p.campaignId===c.id && (p.numbers||[]).map(Number).includes(winningNumber))
+        .forEach(p=>{
+          winners.push({
+            position:pos+1,
+            result,
+            campaignId:c.id,
+            campaign:c.title,
+            type:c.type,
+            winningNumber,
+            name:p.name||'',
+            phone:p.phone||''
+          });
+        });
+    });
+  });
+
+  db.results=db.results||[];
+  db.results.push({
+    id:crypto.randomUUID(),
+    time,
+    results:cleanResults,
+    winners,
+    createdAt:new Date().toISOString()
+  });
+
+  save(db);
+
+  res.json({
+    ok:true,
+    time,
+    results:cleanResults,
+    campaignsChecked:campaigns.length,
+    winners
+  });
 });
 app.patch('/api/admin/campaign/:id/status',requireAdmin,(req,res)=>{
   const db=load(); const c=db.campaigns.find(x=>x.id===req.params.id);
