@@ -24,7 +24,7 @@ async function load(){
 const grupos=[['Avestruz','🐦'],['Águia','🦅'],['Burro','🫏'],['Borboleta','🦋'],['Cachorro','🐶'],['Cabra','🐐'],['Carneiro','🐏'],['Camelo','🐪'],['Cobra','🐍'],['Coelho','🐰'],['Cavalo','🐴'],['Elefante','🐘'],['Galo','🐓'],['Gato','🐱'],['Jacaré','🐊'],['Leão','🦁'],['Macaco','🐒'],['Porco','🐷'],['Pavão','🦚'],['Peru','🦃'],['Touro','🐂'],['Tigre','🐯'],['Urso','🐻'],['Veado','🦌'],['Vaca','🐄']];
 function draw(){
   const grid=$('grid'); grid.innerHTML='';
-grid.style.gridTemplateColumns = campaign.type==='grupo' ? 'repeat(3, minmax(180px,1fr))' : 'repeat(10,1fr)';
+grid.style.gridTemplateColumns = campaign.type==='grupo' ? 'repeat(3, minmax(0,1fr))' : 'repeat(10,1fr)';
 grid.style.gap = '10px';
   for(let n=1;n<=campaign.totalTickets;n++){
     const b=document.createElement('button');
