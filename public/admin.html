@@ -9,7 +9,10 @@
 <section class="hero"><div><span class="badge">PAINEL ADMINISTRATIVO</span><h1>Gerenciar campanhas</h1><p>Crie, pause e acompanhe suas campanhas.</p></div></section>
 <section class="layout"><div class="panel"><h2>Criar campanha</h2><form id="form">
 <label>Nome da campanha<input name="title" required></label><label>Prêmio<input name="prize" required></label>
-<label>Tipo<select name="type"><option value="numeros">Números</option><option value="dezena">Dezena</option><option value="centena">Centena</option><option value="grupo">Grupo</option></select></label><label>Horário
+<label>Tipo<select name="type"><option value="numeros">Números</option><option value="dezena">Dezena</option><option value="centena">Centena</option><option value="grupo">Grupo</option></select></label><label>Data
+<input name="date" type="date" required>
+</label>
+<label>Horário
 <input name="time" type="time" required>
 </label>
 <label>Até qual posição vale?
@@ -48,7 +51,9 @@
 </aside><aside class="cart">
 <div class="panel">
   <h2>Resultados</h2>
-
+<label>Data
+<input id="resultDate" type="date">
+</label>
   <label>Horário
     <input id="resultTime" type="time">
   </label>
@@ -127,6 +132,7 @@ async function statusChange(id,status){const r=await fetch('/api/admin/campaign/
 form.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(form));delete o.image; if(image.files[0]){const fd=new FormData();fd.append('image',image.files[0]);const ur=await fetch('/api/admin/upload',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});const ud=await ur.json();if(!ur.ok){msg.textContent=ud.error||'Erro no upload';return;}o.imageUrl=ud.url;}const r=await fetch('/api/admin/campaigns',{method:'POST',headers:auth(),body:JSON.stringify(o)});const d=await r.json();msg.textContent=r.ok?'Campanha criada com sucesso!':d.error;if(r.ok){form.reset();refresh();}};
 saveResults.onclick=async()=>{
   const body={
+    date:resultDate.value,
     time:resultTime.value,
     results:[
       result1.value,
@@ -184,6 +190,11 @@ manualSaleForm.onsubmit=async e=>{
 
   if(r.ok){
 const rifa=manualCampaign.options[manualCampaign.selectedIndex].text;
+const tipo=d.type||'numeros';
+const rotulo=tipo==='centena'?'Centena':tipo==='dezena'?'Dezena':tipo==='grupo'?'Grupo':'Número';
+const casas=tipo==='centena'?3:(tipo==='dezena'||tipo==='grupo'?2:0);
+const numeroExibido=casas?String(d.number).padStart(casas,'0'):String(d.number);
+const dataExibida=d.date?d.date.split('-').reverse().join('/'):'';
 const bilhete=window.open('','_blank','width=400,height=600');
 bilhete.document.write(`
 <style>
@@ -198,7 +209,9 @@ hr{border:0;border-top:1px dashed
 <b>Rifa:</b> ${rifa}<br>
 <b>Cliente:</b> ${body.name}<br>
 <b>WhatsApp:</b> ${body.phone}<br>
-<b>Número/Grupo:</b> ${body.number}<br>
+<b>Data:</b> ${dataExibida}<br>
+<b>Horário:</b> ${d.time}<br>
+<b>${rotulo}:</b> ${numeroExibido}<br>
 <b>Pagamento:</b> ${body.paymentMethod}<br>
 <b>Status:</b> PAGO / VENDIDO
 <hr>

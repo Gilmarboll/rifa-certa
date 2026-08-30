@@ -192,17 +192,17 @@ app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
   });
 
   save(db);
-  res.json({ok:true});
+  res.json({ok:true,type:c.type,date:c.date,time:c.time,number:n});
 });
 app.post('/api/admin/campaigns',requireAdmin,(req,res)=>{
- const {title,prize,type='numeros',price,totalTickets,imageUrl='',time,maxPrizePosition='1',prize1='0',prize2='0',prize3='0',prize4='0',prize5='0'}=req.body;
+ const {title,prize,type='numeros',price,totalTickets,imageUrl='',date,time,maxPrizePosition='1',prize1='0',prize2='0',prize3='0',prize4='0',prize5='0'}=req.body;
   if(!title||!prize||!Number(price)||!Number(totalTickets))
     return res.status(400).json({error:'Preencha os campos obrigatórios.'});
   const db=load();
   const c={
     id:crypto.randomUUID(),title,prize,type,price:Number(price),
     totalTickets:Number(totalTickets),status:'ativa',sold:[],
-   reservations:{},imageUrl,time,
+   reservations:{},imageUrl,date,time,
 maxPrizePosition:Number(maxPrizePosition),
 prizes:[Number(prize1||0),Number(prize2||0),Number(prize3||0),Number(prize4||0),Number(prize5||0)],
 createdAt:new Date().toISOString()
@@ -210,9 +210,9 @@ createdAt:new Date().toISOString()
   db.campaigns.push(c); save(db); res.json(c);
 });
 app.post('/api/admin/results',requireAdmin,(req,res)=>{
-  const {time,results=[]}=req.body;
+  const {date,time,results=[]}=req.body;
 
-  if(!time || !results.length){
+  if(!date || !time || !results.length){
     return res.status(400).json({error:'Informe o horário e pelo menos 1 resultado.'});
   }
 
@@ -221,7 +221,7 @@ app.post('/api/admin/results',requireAdmin,(req,res)=>{
   const cleanResults=results
     .map(x=>String(x).replace(/\D/g,'').padStart(4,'0').slice(-4));
 
-  const campaigns=(db.campaigns||[]).filter(c=>c.time===time);
+  const campaigns=(db.campaigns||[]).filter(c=>c.date===date && c.time===time);
   const payments=(db.payments||[]).filter(p=>p.status==='processed');
 
   const winners=[];
@@ -265,6 +265,7 @@ if(prizeAmount<=0) return;
   db.results=db.results||[];
   db.results.push({
     id:crypto.randomUUID(),
+    date,
     time,
     results:cleanResults,
     winners,
@@ -275,6 +276,7 @@ if(prizeAmount<=0) return;
 
   res.json({
     ok:true,
+    date,
     time,
     results:cleanResults,
     campaignsChecked:campaigns.length,
