@@ -51,7 +51,7 @@ b.innerHTML=
     if(campaign.type!=='grupo') b.textContent=campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(2,'0');
     if(campaign.sold.includes(n)){
   b.classList.add('sold');
-  if(campaign.type==='grupo') b.innerHTML += '<span style="display:block;font-weight:bold;margin-top:8px">VENDIDO</span>';
+  if(campaign.type==='grupo') b.querySelector('span').insertAdjacentHTML('beforebegin','<span style="display:block;font-weight:bold;margin:4px 0">VENDIDO</span>');
 }
 else if(campaign.reservations.includes(n)){
   b.classList.add('reserved');
