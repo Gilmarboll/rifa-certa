@@ -401,6 +401,7 @@ numbers: findReservation(db,reservationId)?.numbers || [],name:payer.first_name,
     res.json({
       mode:'mercadopago',
       paymentId,
+      receiptUrl:'/comprovante.html?id='+paymentId,
       orderId:order.id,
       status:order.status,
       statusDetail:order.status_detail,
@@ -443,6 +444,7 @@ app.post('/api/webhooks/mercadopago',(req,res)=>{
       const reservationId=order.external_reference;
       const finalized=finalizeReservation(db,reservationId);
       if(paymentRow) paymentRow.paidAt=new Date().toISOString();
+      if(paymentRow) paymentRow.receiptUrl='/comprovante.html?id='+paymentRow.id;
       if(finalized) paymentRow && (paymentRow.numbers=finalized.numbers);
     }
     save(db);

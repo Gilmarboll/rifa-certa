@@ -131,6 +131,7 @@ async function createPix(){
   });
   const d=await r.json();
   if(d.paymentId) localStorage.setItem('ultimoComprovante',d.paymentId);
+  if(d.receiptUrl) localStorage.setItem('ultimoComprovanteUrl',d.receiptUrl);
   if(!r.ok){area.textContent=d.error||'Erro ao gerar Pix';return;}
 
   if(d.mode==='demo'){
@@ -167,11 +168,11 @@ async function createPix(){
 }
 const lastReceiptBtn=$('lastReceiptBtn');
 const ultimoComprovante=localStorage.getItem('ultimoComprovante');
-
-if(lastReceiptBtn && ultimoComprovante){
+const ultimoComprovanteUrl=localStorage.getItem('ultimoComprovanteUrl');
+if(lastReceiptBtn && (ultimoComprovanteUrl || ultimoComprovante)){
   lastReceiptBtn.style.display='block';
   lastReceiptBtn.onclick=()=>window.open(
-    '/comprovante.html?id='+encodeURIComponent(ultimoComprovante),
+    ultimoComprovanteUrl || '/comprovante.html?id='+encodeURIComponent(ultimoComprovante),
     '_blank'
   );
 }
