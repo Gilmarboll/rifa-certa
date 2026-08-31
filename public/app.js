@@ -137,10 +137,22 @@ async function createPix(){
     $('demoConfirm').onclick=async()=>{
       const rr=await fetch(`/api/campaign/${campaign.id}/demo-confirm`,{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({reservationId:currentReservation.reservationId})
-      });
+        body:JSON.stringify({
+  reservationId:currentReservation.reservationId,
+  payer:{
+    first_name:$('payerName').value.trim(),
+    phone:$('payerPhone').value.trim()
+  }
+})
+              });
       const dd=await rr.json();
-      area.textContent=rr.ok?`Pagamento demo confirmado. Números: ${dd.numbers.join(', ')}`:(dd.error||'Falha');
+      if(rr.ok){
+  area.innerHTML=`<p><strong>✅ Pagamento confirmado</strong></p>
+  <p>Números: ${dd.numbers.join(', ')}</p>
+  <button class="primary" onclick="window.open('/comprovante.html?id=${dd.paymentId}','_blank')">Ver comprovante</button>`;
+}else{
+  area.textContent=dd.error||'Falha';
+}
       await load();
     };
     return;

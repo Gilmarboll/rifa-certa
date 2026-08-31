@@ -158,6 +158,30 @@ app.get('/api/campaign/:id',(req,res)=>{
   res.json({...c,reservations:Object.keys(c.reservations||{}).map(Number)});
 });
 
+app.get('/api/ticket/:id',(req,res)=>{
+  const db=load();
+  const p=(db.payments||[]).find(x=>x.id===req.params.id);
+
+  if(!p) return res.status(404).json({error:'Comprovante não encontrado.'});
+
+  const c=(db.campaigns||[]).find(x=>x.id===p.campaignId);
+
+  res.json({
+    id:p.id,
+    campaign:c ? {
+      title:c.title,
+      type:c.type,
+      date:c.date,
+      time:c.time
+    } : null,
+    name:p.name||'',
+    phone:p.phone||'',
+    numbers:p.numbers||[],
+    amount:Number(p.amount||0),
+    status:p.status||'',
+    createdAt:p.createdAt||''
+  });
+});
 app.post('/api/admin/upload',requireAdmin,upload.single('image'),(req,res)=>{
   if(!req.file) return res.status(400).json({error:'Envie JPG, PNG ou WEBP de até 5 MB.'});
   res.json({url:'/uploads/'+req.file.filename});
@@ -358,9 +382,10 @@ app.post('/api/payments/pix',(req,res)=>{
     });
     const payment=order.transactions?.payments?.[0]||{};
     const pm=payment.payment_method||{};
-
+    
+    const paymentId=crypto.randomUUID();
     db.payments.push({
-      id:crypto.randomUUID(),
+     id:paymentId,
       reservationId,
       campaignId:campaign.id,
 numbers: findReservation(db,reservationId)?.numbers || [],name:payer.first_name,phone:payer.phone,
@@ -375,6 +400,7 @@ numbers: findReservation(db,reservationId)?.numbers || [],name:payer.first_name,
 
     res.json({
       mode:'mercadopago',
+      paymentId,
       orderId:order.id,
       status:order.status,
       statusDetail:order.status_detail,
@@ -426,13 +452,38 @@ app.post('/api/webhooks/mercadopago',(req,res)=>{
     res.sendStatus(500);
   });
 });
-
 app.post('/api/campaign/:id/demo-confirm',(req,res)=>{
   const db=load();
   const finalized=finalizeReservation(db,req.body.reservationId);
-  if(!finalized) return res.status(404).json({error:'Reserva expirada ou inexistente.'});
+
+  if(!finalized)
+    return res.status(404).json({error:'Reserva expirada ou inexistente.'});
+
+  const payer=req.body.payer||{};
+  const paymentId=crypto.randomUUID();
+
+  db.payments=db.payments||[];
+  db.payments.push({
+    id:paymentId,
+    reservationId:req.body.reservationId,
+    campaignId:finalized.campaign.id,
+    numbers:finalized.numbers,
+    name:payer.first_name||'',
+    phone:payer.phone||'',
+    provider:'demo',
+    amount:Number(finalized.numbers.length*finalized.campaign.price),
+    status:'processed',
+    statusDetail:'demo_confirmed',
+    createdAt:new Date().toISOString()
+  });
+
   save(db);
-  res.json({ok:true,numbers:finalized.numbers});
+
+  res.json({
+    ok:true,
+    paymentId,
+    numbers:finalized.numbers
+  });
 });
 async function initDatabase(){
   await pool.query(`

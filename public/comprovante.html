@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comprovante - Rifa Certa</title>
+
+  <style>
+    body{
+      margin:0;
+      font-family:Arial,sans-serif;
+      background:#071711;
+      color:white;
+    }
+
+    .wrap{
+      max-width:600px;
+      margin:30px auto;
+      padding:20px;
+    }
+
+    .card{
+      background:#10241c;
+      border:1px solid #315342;
+      border-radius:18px;
+      padding:24px;
+    }
+
+    h1{
+      margin-top:0;
+    }
+
+    .ok{
+      color:#8df13c;
+      font-weight:bold;
+      font-size:20px;
+      margin-bottom:20px;
+    }
+
+    .linha{
+      margin:10px 0;
+      font-size:18px;
+    }
+
+    .numeros{
+      margin-top:8px;
+      font-weight:bold;
+      color:#8df13c;
+    }
+
+    button{
+      width:100%;
+      margin-top:20px;
+      padding:14px;
+      border:0;
+      border-radius:12px;
+      font-weight:bold;
+      font-size:16px;
+      cursor:pointer;
+      background:linear-gradient(90deg,#20d86b,#9cf11f);
+      color:#102010;
+    }
+
+    .erro{
+      color:#ff6b6b;
+      font-weight:bold;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="wrap">
+  <div class="card">
+    <h1>🍀 Rifa Certa</h1>
+    <div id="conteudo">Carregando comprovante...</div>
+  </div>
+</div>
+
+<script>
+async function carregarComprovante(){
+  const id=new URLSearchParams(location.search).get('id');
+  const conteudo=document.getElementById('conteudo');
+
+  if(!id){
+    conteudo.innerHTML='<div class="erro">Comprovante inválido.</div>';
+    return;
+  }
+
+  const r=await fetch('/api/ticket/'+encodeURIComponent(id));
+  const d=await r.json();
+
+  if(!r.ok){
+    conteudo.innerHTML='<div class="erro">'+(d.error||'Comprovante não encontrado.')+'</div>';
+    return;
+  }
+
+  const status=d.status==='processed' ? 'PAGO / VENDIDO' : d.status;
+
+  conteudo.innerHTML=`
+    <div class="ok">✅ Pagamento confirmado</div>
+
+    <div class="linha"><strong>Campanha:</strong> ${d.campaign?.title||'-'}</div>
+    <div class="linha"><strong>Tipo:</strong> ${d.campaign?.type||'-'}</div>
+    <div class="linha"><strong>Cliente:</strong> ${d.name||'-'}</div>
+    <div class="linha"><strong>WhatsApp:</strong> ${d.phone||'-'}</div>
+
+    <div class="linha">
+      <strong>Números comprados:</strong>
+      <div class="numeros">${(d.numbers||[]).join(', ')}</div>
+    </div>
+
+    <div class="linha"><strong>Valor:</strong> R$ ${Number(d.amount||0).toFixed(2).replace('.',',')}</div>
+    <div class="linha"><strong>Status:</strong> ${status}</div>
+
+    <button onclick="window.print()">Imprimir / Salvar comprovante</button>
+  `;
+}
+
+carregarComprovante();
+</script>
+
+</body>
+</html>
