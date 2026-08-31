@@ -114,11 +114,24 @@ ${d.status==='processed'?'✅ Pagamento confirmado':'⏳ Pagamento ainda não co
 
     <div class="linha"><strong>Valor:</strong> R$ ${Number(d.amount||0).toFixed(2).replace('.',',')}</div>
     <div class="linha"><strong>Status:</strong> ${status}</div>
-
+    <button onclick="compartilharComprovante()">Compartilhar comprovante</button>
     <button onclick="window.print()">Imprimir / Salvar comprovante</button>
   `;
 }
+async function compartilharComprovante(){
+  const url=location.href;
 
+  if(navigator.share){
+    await navigator.share({
+      title:'Comprovante Rifa Certa',
+      text:'Meu comprovante da Rifa Certa',
+      url
+    });
+  }else{
+    await navigator.clipboard.writeText(url);
+    alert('Link do comprovante copiado!');
+  }
+}
 carregarComprovante();
 </script>
 
