@@ -30,7 +30,8 @@ grid.style.gridTemplateColumns = campaign.type==='grupo'
  ? 'repeat(5,minmax(0,1fr))'
  : 'repeat(5,minmax(0,1fr))';
 grid.style.gap = '10px';
-  for(let n=1;n<=campaign.totalTickets;n++){
+   const limite=campaign.type==='grupo'?25:campaign.type==='dezena'?100:campaign.type==='centena'?1000:campaign.totalTickets;
+for(let n=1;n<=limite;n++){
     const b=document.createElement('button');
     b.className='ticket';if(campaign.type==='grupo'){
   b.style.minHeight='120px';
@@ -52,7 +53,7 @@ b.innerHTML=
  '<div style="font-size:14px;font-weight:bold;white-space:nowrap">'+nums.join(' ')+'</div>';
 }
  
-    if(campaign.type!=='grupo') b.textContent=campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(2,'0');
+    if(campaign.type!=='grupo') b.textContent=campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(campaign.type==='centena'?3:2,'0');
     if(campaign.sold.includes(n)){
   b.classList.add('sold');
   if(campaign.type==='grupo') b.insertAdjacentHTML('beforeend','<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:white;color:#111;padding:4px 8px;border-radius:6px;font-weight:bold;z-index:2;white-space:nowrap">VENDIDO</span>');
@@ -76,13 +77,14 @@ else if(selected.has(n)){
 }
 function updateCart(){
   $('selectedList').innerHTML=selected.size
-    ? [...selected].sort((a,b)=>a-b).map(n=>`<span class="chip">${String(n).padStart(2,'0')}</span>`).join('')
+    ? [...selected].sort((a,b)=>a-b).map(n=>`<span class="chip">${campaign.type==='centena'?String(n%1000).padStart(3,'0'):campaign.type==='dezena'?String(n%100).padStart(2,'0'):String(n).padStart(2,'0')}</span>`).join('')
     : 'Nenhum número escolhido.';
   $('total').textContent=money(selected.size*campaign.price);
 }
 $('randomBtn').onclick=()=>{
   const available=[];
-  for(let n=1;n<=campaign.totalTickets;n++){
+ const limiteAleatorio=campaign.type==='grupo'?25:campaign.type==='dezena'?100:campaign.type==='centena'?1000:campaign.totalTickets;
+for(let n=1;n<=limiteAleatorio;n++){
     if(!campaign.sold.includes(n)&&!campaign.reservations.includes(n)) available.push(n);
   }
   selected.clear();
