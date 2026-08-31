@@ -130,6 +130,7 @@ async function createPix(){
     })
   });
   const d=await r.json();
+  if(d.paymentId) localStorage.setItem('ultimoComprovante',d.paymentId);
   if(!r.ok){area.textContent=d.error||'Erro ao gerar Pix';return;}
 
   if(d.mode==='demo'){
@@ -163,5 +164,15 @@ async function createPix(){
   const link=d.ticketUrl ? `<p><a target="_blank" rel="noopener" href="${d.ticketUrl}" style="color:#b6f43e">Abrir página do Pix</a></p>` : '';
   area.innerHTML=`<h3>PIX gerado</h3>${img}${code}${link}<p>Status: ${d.statusDetail||d.status}</p>`;
   if(d.qrCode) $('copyPix').onclick=()=>navigator.clipboard.writeText(d.qrCode);
+}
+const lastReceiptBtn=$('lastReceiptBtn');
+const ultimoComprovante=localStorage.getItem('ultimoComprovante');
+
+if(lastReceiptBtn && ultimoComprovante){
+  lastReceiptBtn.style.display='block';
+  lastReceiptBtn.onclick=()=>window.open(
+    '/comprovante.html?id='+encodeURIComponent(ultimoComprovante),
+    '_blank'
+  );
 }
 load();
