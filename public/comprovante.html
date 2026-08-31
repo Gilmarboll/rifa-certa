@@ -65,6 +65,40 @@
       color:#ff6b6b;
       font-weight:bold;
     }
+@media print{
+  @page{
+    size:48mm 100mm;
+    margin:2mm;
+  }
+
+  body{
+    background:white;
+    color:black;
+    font-size:10px;
+  }
+
+  .wrap{
+    width:44mm;
+    margin:0;
+    padding:0;
+  }
+
+  .card{
+    background:white;
+    color:black;
+    border:0;
+    padding:0;
+  }
+
+  h1{
+    font-size:15px;
+    margin:0 0 5px 0;
+  }
+
+  button{
+    display:none !important;
+  }
+}
   </style>
 </head>
 
