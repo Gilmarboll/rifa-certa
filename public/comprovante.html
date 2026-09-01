@@ -135,7 +135,16 @@ async function carregarComprovante(){
   }
 
   const status=d.status==='processed' ? 'PAGO / VENDIDO' : d.status;
+  const digitos={
+  grupo:2,
+  dezena:2,
+  centena:3,
+  milhar:4
+}[d.campaign?.type] || 0;
 
+const numerosFormatados=(d.numbers||[])
+  .map(n=>String(n).padStart(digitos,'0'))
+  .join(', ');
   conteudo.innerHTML=`
    <div class="${d.status==='processed'?'ok':'erro'}">
 ${d.status==='processed'?'✅ Pagamento confirmado':'⏳ Pagamento ainda não confirmado'}
@@ -148,7 +157,7 @@ ${d.status==='processed'?'✅ Pagamento confirmado':'⏳ Pagamento ainda não co
 
     <div class="linha">
       <strong>Números comprados:</strong>
-      <div class="numeros">${(d.numbers||[]).join(', ')}</div>
+     <div class="numeros">${numerosFormatados}</div>
     </div>
 
     <div class="linha"><strong>Valor:</strong> R$ ${Number(d.amount||0).toFixed(2).replace('.',',')}</div>
