@@ -7,6 +7,7 @@ const { Pool } = require('pg');
 const app = express();
 app.use(express.json({limit:'2mb'}));
 app.use(express.static(path.join(__dirname,'public')));
+app.use('/api', (req,res,next)=>{ res.set('Cache-Control','no-store'); next(); });
 
 const DB = path.join(__dirname,'data.json');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
@@ -51,18 +52,31 @@ function load(){ return state; }
 
   
 
+// Serialize immutable snapshots: older writes must never overwrite newer sales.
+let saving=Promise.resolve();
 function save(db){
   state=db;
-  pool.query(
+  const snapshot=JSON.stringify(db);
+  const write=saving.then(()=>pool.query(
     'INSERT INTO app_state (id,data) VALUES (1,$1) ON CONFLICT (id) DO UPDATE SET data=EXCLUDED.data',
-    [db]
-  ).catch(err=>console.error('DB save error',err));
+    [snapshot]
+  ));
+  saving=write.catch(err=>console.error('DB save error',err.message));
+  return write;
+}
+const terminalStatuses=new Set(['canceled','expired','failed','refunded']);
+function pendingPayment(reservationId){
+  return (state.payments||[]).find(p=>p.reservationId===reservationId &&
+    p.provider==='mercadopago' && !terminalStatuses.has(p.status) && !p.fulfilledAt);
 }
 function clean(c){
-  const now=Date.now();
   for(const [n,r] of Object.entries(c.reservations||{})){
-    if(r.expiresAt<=now) delete c.reservations[n];
+    // A payable Pix must be canceled/checked before its numbers become available.
+    if(r.expiresAt<=Date.now() && !pendingPayment(r.reservationId)) delete c.reservations[n];
   }
+}
+function asyncRoute(fn){
+  return (req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
 }
 function tokenFrom(req){ return (req.headers.authorization||'').replace(/^Bearer\s+/,''); }
 function requireAdmin(req,res,next){
@@ -122,7 +136,7 @@ async function mpRequest(url,options={}){
     'Authorization':`Bearer ${MP_ACCESS_TOKEN}`,
     ...(options.headers||{})
   };
-  const r=await fetch(url,{...options,headers});
+  const r=await fetch(url,{signal:AbortSignal.timeout(15000),...options,headers});
   const data=await r.json().catch(()=>({}));
   if(!r.ok){
     const err=new Error(data.message || data.error || `Mercado Pago HTTP ${r.status}`);
@@ -176,6 +190,8 @@ app.get('/api/ticket/:id',(req,res)=>{
     } : null,
     name:p.name||'',
     phone:p.phone||'',
+    fulfillmentStatus:p.fulfillmentStatus||'',
+    provider:p.provider||'',
     numbers:p.numbers||[],
     amount:Number(p.amount||0),
     status:p.status||'',
@@ -193,13 +209,15 @@ app.get('/api/admin/campaigns',requireAdmin,(req,res)=>{
 app.get('/api/admin/payments',requireAdmin,(req,res)=>{ const db=load(); res.json(db.payments||[]); });
 app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
   const {campaignId,name,phone,number,paymentMethod}=req.body;
-  const n=Number(number);
+  let n=Number(number);
   const db=load();
   const c=db.campaigns.find(x=>x.id===campaignId);
 
   if(!c) return res.status(404).json({error:'Rifa não encontrada.'});
-  if(!n || n<1 || n>c.totalTickets) return res.status(400).json({error:'Número inválido.'});
-  if(c.sold.includes(n)) return res.status(409).json({error:'Já vendido.'});
+  if(n===0 && ['dezena','centena','milhar'].includes(c.type)) n={dezena:100,centena:1000,milhar:10000}[c.type];
+  if(!Number.isInteger(n) || n<1 || n>c.totalTickets) return res.status(400).json({error:'Número inválido.'});
+  clean(c);
+  if(c.sold.includes(n)||c.reservations[n]) return res.status(409).json({error:'Já vendido ou reservado.'});
 
   c.sold.push(n);
   db.payments=db.payments||[];
@@ -246,7 +264,7 @@ app.post('/api/admin/results',requireAdmin,(req,res)=>{
     .map(x=>String(x).replace(/\D/g,'').padStart(4,'0').slice(-4));
 
   const campaigns=(db.campaigns||[]).filter(c=>c.date===date && c.time===time);
-  const payments=(db.payments||[]).filter(p=>p.status==='processed');
+  const payments=(db.payments||[]).filter(p=>p.status==='processed' && p.fulfillmentStatus!=='review_required');
 
   const winners=[];
 
@@ -315,7 +333,7 @@ app.patch('/api/admin/campaign/:id/status',requireAdmin,(req,res)=>{
   c.status=req.body.status; save(db); res.json({ok:true,status:c.status});
 });
 
-app.post('/api/campaign/:id/reserve',(req,res)=>{
+app.post('/api/campaign/:id/reserve',asyncRoute(async(req,res)=>{
   const db=load();
   const c=db.campaigns.find(x=>x.id===req.params.id);
   if(!c||c.status!=='ativa') return res.sendStatus(404);
@@ -329,163 +347,193 @@ app.post('/api/campaign/:id/reserve',(req,res)=>{
   const reservationId=crypto.randomUUID();
   const expiresAt=Date.now()+15*60*1000;
   nums.forEach(n=>c.reservations[n]={reservationId,expiresAt});
-  save(db);
-  res.json({reservationId,numbers:nums,expiresAt,total:nums.length*c.price});
-});
+  await save(db);
+  res.json({reservationId,campaignId:c.id,numbers:nums,expiresAt,total:nums.length*c.price});
+}));
 
-app.post('/api/payments/pix',(req,res)=>{
-  (async()=>{
-    const {reservationId,payer={}}=req.body||{};
-    if(!reservationId) return res.status(400).json({error:'Reserva obrigatória.'});
-    const db=load();
-    const found=findReservation(db,reservationId);
-    if(!found) return res.status(404).json({error:'Reserva inexistente ou expirada.'});
-    const {campaign,numbers}=found;
-    const amount=(numbers.length*campaign.price).toFixed(2);
-
-    if(!MP_ACCESS_TOKEN){
-      return res.json({
-        mode:'demo',
-        reservationId,
-        amount:Number(amount),
-        message:'Mercado Pago ainda não configurado. Cadastre MP_ACCESS_TOKEN para gerar Pix real.'
-      });
+function paymentView(p){
+  return {
+    mode:p.provider, paymentId:p.id, receiptUrl:'/comprovante.html?id='+p.id,
+    status:p.status, statusDetail:p.statusDetail, amount:p.amount,
+    fulfillmentStatus:p.fulfillmentStatus||'',
+    qrCode:p.qrCode||'', qrCodeBase64:p.qrCodeBase64||'', ticketUrl:p.ticketUrl||''
+  };
+}
+function applyOrder(p,order){
+  if(String(order.id)!==String(p.providerOrderId) || order.external_reference!==p.reservationId ||
+    Math.round(Number(order.total_amount)*100)!==Math.round(p.amount*100)){
+    throw new Error('Os dados do pagamento não correspondem à reserva.');
+  }
+  // A delayed pending response must not undo an already confirmed sale.
+  if(p.fulfilledAt && order.status!=='processed' && !['refunded','charged_back'].includes(order.status)) return;
+  p.status=order.status;
+  p.statusDetail=order.status_detail;
+  p.updatedAt=new Date().toISOString();
+  const pm=order.transactions?.payments?.[0]?.payment_method||{};
+  p.qrCode=pm.qr_code||p.qrCode||'';
+  p.qrCodeBase64=pm.qr_code_base64||p.qrCodeBase64||'';
+  p.ticketUrl=pm.ticket_url||p.ticketUrl||'';
+  const c=state.campaigns.find(c=>c.id===p.campaignId);
+  if(order.status==='processed' && order.status_detail==='accredited' && !p.fulfilledAt){
+    p.paidAt=p.paidAt||new Date().toISOString();
+    const conflict=!c || !p.numbers?.length || p.numbers.some(n=>
+      c.sold.includes(n) || (c.reservations[n] && c.reservations[n].reservationId!==p.reservationId));
+    if(conflict){
+      p.fulfillmentStatus='review_required';
+      return; // Never issue a valid sold ticket over another buyer's allocation.
     }
-
-    if(!payer.phone || !payer.first_name)
-      return res.status(400).json({error:'Nome e WhatsApp são obrigatórios para gerar o Pix.'});
-
-    const idem=crypto.randomUUID();
-    const body={
-      type:'online',
-      external_reference:reservationId,
-      processing_mode:'automatic',
-      total_amount:amount,
-      description:`Rifa Certa - ${campaign.title}`,
-      payer:{
-        email:process.env.MP_PAYER_EMAIL,
-        first_name:payer.first_name,
-        ...(payer.last_name?{last_name:payer.last_name}:{})
-      },
-      transactions:{
-        payments:[{
-          amount,
-          payment_method:{id:'pix',type:'bank_transfer'}
-        }]
+    p.numbers.forEach(n=>{ c.sold.push(n); delete c.reservations[n]; });
+    p.fulfilledAt=new Date().toISOString();
+    p.fulfillmentStatus='sold';
+  }
+  if(c && terminalStatuses.has(order.status) && !p.fulfilledAt){
+    for(const n of p.numbers||[]){
+      if(c.reservations[n]?.reservationId===p.reservationId) delete c.reservations[n];
+    }
+  }
+}
+const paymentJobs=new Map();
+async function withPaymentLock(id,fn){
+  const previous=paymentJobs.get(id)||Promise.resolve();
+  const job=previous.catch(()=>{}).then(fn);
+  paymentJobs.set(id,job);
+  try{return await job;}finally{if(paymentJobs.get(id)===job) paymentJobs.delete(id);}
+}
+async function syncPayment(p){
+  return withPaymentLock(p.reservationId,async()=>{
+    if(!p.providerOrderId){
+      if(!p.requestBody) return p;
+      let recovered;
+      try{
+        recovered=await mpRequest('https://api.mercadopago.com/v1/orders',{
+          method:'POST',headers:{'X-Idempotency-Key':p.reservationId},body:JSON.stringify(p.requestBody)
+        });
+      }catch(err){
+        if(err.status>=400 && err.status<500 && ![408,409,429].includes(err.status)){
+          p.status='failed';await save(state);return p;
+        }
+        throw err;
       }
-    };
-
-    const order=await mpRequest('https://api.mercadopago.com/v1/orders',{
-      method:'POST',
-      headers:{'X-Idempotency-Key':idem},
-      body:JSON.stringify(body)
-    });
-    const payment=order.transactions?.payments?.[0]||{};
-    const pm=payment.payment_method||{};
-    
-    const paymentId=crypto.randomUUID();
-    db.payments.push({
-     id:paymentId,
-      reservationId,
-      campaignId:campaign.id,
-numbers: findReservation(db,reservationId)?.numbers || [],name:payer.first_name,phone:payer.phone,
-      provider:'mercadopago',
-      providerOrderId:order.id,
-      amount:Number(amount),
-      status:order.status,
-      statusDetail:order.status_detail,
-      createdAt:new Date().toISOString()
-    });
-    save(db);
-
-    res.json({
-      mode:'mercadopago',
-      paymentId,
-      receiptUrl:'/comprovante.html?id='+paymentId,
-      orderId:order.id,
-      status:order.status,
-      statusDetail:order.status_detail,
-      amount:Number(amount),
-      qrCode:pm.qr_code||'',
-      qrCodeBase64:pm.qr_code_base64||'',
-      ticketUrl:pm.ticket_url||''
-    });
-  })().catch(err=>{
-    console.error(err);
-    res.status(err.status||500).json({error:err.message,details:err.details||undefined});
+      p.providerOrderId=recovered.id;
+      applyOrder(p,recovered);
+      await save(state);
+    }
+    const url='https://api.mercadopago.com/v1/orders/'+encodeURIComponent(p.providerOrderId);
+    let order=await mpRequest(url);
+    applyOrder(p,order);
+    if(!p.fulfilledAt && !terminalStatuses.has(p.status) && p.expiresAt<=Date.now() &&
+      ['action_required','created'].includes(order.status)){
+      try{
+        order=await mpRequest(url+'/cancel',{method:'POST',headers:{'X-Idempotency-Key':'cancel-'+p.reservationId}});
+      }catch(err){
+        // Payment can win the race with cancellation: query the authoritative result.
+        order=await mpRequest(url);
+      }
+      applyOrder(p,order);
+    }
+    await save(state);
+    return p;
   });
-});
+}
+app.get('/api/reservations/:id',asyncRoute(async(req,res)=>{
+  const p=(state.payments||[]).find(p=>p.reservationId===req.params.id);
+  if(p?.provider==='mercadopago' && !p.fulfilledAt && !terminalStatuses.has(p.status)) await syncPayment(p);
+  const found=findReservation(state,req.params.id);
+  if(!found && !p) return res.status(404).json({error:'Reserva inexistente ou expirada.'});
+  if(!found && p?.provider==='demo' && !p.fulfilledAt) return res.status(410).json({error:'Reserva expirada.'});
+  const c=found?.campaign||state.campaigns.find(c=>c.id===p.campaignId);
+  const numbers=found?.numbers||p.numbers;
+  const expiresAt=p?.expiresAt||c.reservations[numbers[0]].expiresAt;
+  res.json({reservationId:req.params.id,campaignId:c.id,numbers,expiresAt,
+    total:p?.amount||numbers.length*c.price,payment:p?paymentView(p):null});
+}));
 
-app.get('/api/payments/order/:id',(req,res)=>{
-  (async()=>{
-    const order=await mpRequest(`https://api.mercadopago.com/v1/orders/${encodeURIComponent(req.params.id)}`);
-    res.json({id:order.id,status:order.status,statusDetail:order.status_detail});
-  })().catch(err=>res.status(err.status||500).json({error:err.message}));
-});
-
-app.post('/api/webhooks/mercadopago',(req,res)=>{
-  (async()=>{
-    if(!validMPWebhook(req)) return res.sendStatus(401);
-
-    const orderId=(req.query['data.id'] || req.body?.data?.[0]?.id || req.body?.data?.id || '').toString();
-    if(!orderId) return res.sendStatus(200);
-
-    const order=await mpRequest('https://api.mercadopago.com/v1/orders/'+encodeURIComponent(orderId));
+app.post('/api/payments/pix',asyncRoute(async(req,res)=>{
+  const {reservationId,payer={}}=req.body||{};
+  if(typeof reservationId!=='string') return res.status(400).json({error:'Reserva obrigatória.'});
+  const name=String(payer.first_name||'').trim();
+  const phone=String(payer.phone||'').replace(/\D/g,'');
+  if(!name || !/^(?:55)?\d{10,11}$/.test(phone))
+    return res.status(400).json({error:'Informe seu nome e WhatsApp com DDD.'});
+  const result=await withPaymentLock(reservationId,async()=>{
     const db=load();
-
-    const paymentRow=db.payments.find(p=>p.providerOrderId===order.id);
-    if(paymentRow){
-      paymentRow.status=order.status;
-      paymentRow.statusDetail=order.status_detail;
-      paymentRow.updatedAt=new Date().toISOString();
+    let p=db.payments.find(p=>p.reservationId===reservationId);
+    if(p?.providerOrderId || p?.provider==='demo') return paymentView(p);
+    const found=findReservation(db,reservationId);
+    if(!found) throw Object.assign(new Error('Reserva inexistente ou expirada.'),{status:410});
+    const {campaign,numbers}=found;
+    const expiresAt=campaign.reservations[numbers[0]].expiresAt;
+    if(expiresAt<=Date.now() && !p) throw Object.assign(new Error('Reserva expirada.'),{status:410});
+    if(!p){
+      p={id:crypto.randomUUID(),reservationId,campaignId:campaign.id,numbers:[...numbers],
+        name,phone,amount:Number((numbers.length*campaign.price).toFixed(2)),expiresAt,
+        provider:MP_ACCESS_TOKEN?'mercadopago':'demo',status:'creating',createdAt:new Date().toISOString()};
+      if(MP_ACCESS_TOKEN){
+        const email=String(payer.email||process.env.MP_PAYER_EMAIL||'').trim();
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+          throw Object.assign(new Error('Não foi possível gerar o Pix. O responsável precisa configurar o e-mail de pagamento.'),{status:400});
+        p.requestBody={type:'online',external_reference:reservationId,processing_mode:'automatic',
+          total_amount:p.amount.toFixed(2),description:`Rifa Certa - ${campaign.title}`,
+          payer:{email,first_name:name},transactions:{payments:[{amount:p.amount.toFixed(2),
+            expiration_time:'PT30M',payment_method:{id:'pix',type:'bank_transfer'}}]}};
+      }
+      db.payments.push(p);
     }
-
-    if(order.status==='processed' && order.status_detail==='accredited'){
-      const reservationId=order.external_reference;
-      const finalized=finalizeReservation(db,reservationId);
-      if(paymentRow) paymentRow.paidAt=new Date().toISOString();
-      if(paymentRow) paymentRow.receiptUrl='/comprovante.html?id='+paymentRow.id;
-      if(finalized) paymentRow && (paymentRow.numbers=finalized.numbers);
+    // Persist the stable idempotency key and exact body BEFORE contacting the provider.
+    await save(db);
+    if(p.provider==='demo') return paymentView(p);
+    try{
+      const order=await mpRequest('https://api.mercadopago.com/v1/orders',{
+        method:'POST',headers:{'X-Idempotency-Key':reservationId},body:JSON.stringify(p.requestBody)
+      });
+      p.providerOrderId=order.id;
+      applyOrder(p,order);
+      await save(db);
+      return paymentView(p);
+    }catch(err){
+      // Keep the same request for a safe retry after a timeout or lost response.
+      if(err.status>=400 && err.status<500 && ![408,409,429].includes(err.status)) p.status='failed';
+      p.lastErrorAt=new Date().toISOString();
+      await save(db);
+      throw err;
     }
-    save(db);
-    res.sendStatus(200);
-  })().catch(err=>{
-    console.error('Webhook error',err);
-    res.sendStatus(500);
   });
-});
-app.post('/api/campaign/:id/demo-confirm',(req,res)=>{
-  const db=load();
-  const finalized=finalizeReservation(db,req.body.reservationId);
-
-  if(!finalized)
-    return res.status(404).json({error:'Reserva expirada ou inexistente.'});
-
-  const payer=req.body.payer||{};
-  const paymentId=crypto.randomUUID();
-
-  db.payments=db.payments||[];
-  db.payments.push({
-    id:paymentId,
-    reservationId:req.body.reservationId,
-    campaignId:finalized.campaign.id,
-    numbers:finalized.numbers,
-    name:payer.first_name||'',
-    phone:payer.phone||'',
-    provider:'demo',
-    amount:Number(finalized.numbers.length*finalized.campaign.price),
-    status:'processed',
-    statusDetail:'demo_confirmed',
-    createdAt:new Date().toISOString()
-  });
-
-  save(db);
-
-  res.json({
-    ok:true,
-    paymentId,
-    numbers:finalized.numbers
-  });
+  res.json(result);
+}));
+app.get('/api/payments/order/:id',asyncRoute(async(req,res)=>{
+  const p=state.payments.find(p=>p.providerOrderId===req.params.id);
+  if(!p) return res.status(404).json({error:'Pagamento não encontrado.'});
+  await syncPayment(p);
+  res.json({id:p.providerOrderId,...paymentView(p)});
+}));
+app.post('/api/webhooks/mercadopago',asyncRoute(async(req,res)=>{
+  if(!validMPWebhook(req)) return res.sendStatus(401);
+  const orderId=String(req.query['data.id']||req.body?.data?.[0]?.id||req.body?.data?.id||'');
+  if(!orderId) return res.sendStatus(200);
+  const p=state.payments.find(p=>String(p.providerOrderId)===orderId);
+  // Creation may still be in flight; ask the provider to deliver again.
+  if(!p) return res.sendStatus(503);
+  await syncPayment(p);
+  res.sendStatus(200);
+}));
+app.post('/api/campaign/:id/demo-confirm',asyncRoute(async(req,res)=>{
+  if(MP_ACCESS_TOKEN) return res.status(403).json({error:'Simulação desativada para pagamentos reais.'});
+  const p=state.payments.find(p=>p.reservationId===req.body.reservationId && p.provider==='demo' && p.campaignId===req.params.id);
+  if(!p) return res.status(404).json({error:'Reserva não encontrada.'});
+  if(!p.fulfilledAt){
+    const found=findReservation(state,p.reservationId);
+    if(!found) return res.status(410).json({error:'Reserva expirada.'});
+    finalizeReservation(state,p.reservationId);
+    p.status='processed'; p.statusDetail='demo_confirmed';
+    p.fulfilledAt=new Date().toISOString(); p.fulfillmentStatus='sold';
+    await save(state);
+  }
+  res.json({...paymentView(p),numbers:p.numbers});
+}));
+app.use((err,req,res,next)=>{
+  console.error('Request error:',err.message);
+  res.status(err.status>=400 && err.status<600?err.status:500)
+    .json({error:'Não foi possível concluir agora. '+(err.status && err.status<500?err.message:'Tente novamente em instantes.')});
 });
 async function initDatabase(){
   await pool.query(`
@@ -497,10 +545,34 @@ async function initDatabase(){
 const result = await pool.query('SELECT data FROM app_state WHERE id=1');
 if(result.rows.length){
   state = result.rows[0].data;
+  state.payments=state.payments||[];
+  for(const p of state.payments){
+    const c=state.campaigns.find(c=>c.id===p.campaignId);
+    p.expiresAt=p.expiresAt||c?.reservations?.[p.numbers?.[0]]?.expiresAt||Date.parse(p.createdAt)+15*60*1000;
+    if(p.status==='processed' && !p.fulfillmentStatus && p.numbers?.length && p.numbers.every(n=>c?.sold.includes(n))){
+      p.fulfilledAt=p.paidAt||p.createdAt;p.fulfillmentStatus='sold';
+    }
+  }
 }else{
   await pool.query('INSERT INTO app_state (id,data) VALUES (1,$1)', [state]);
 }
 }
-initDatabase().then(()=>{
-  app.listen(3000,()=>console.log('Rifa Certa v0.5 em http://localhost:3000'));
-});
+async function reconcilePayments(){
+  for(const p of state.payments||[]){
+    if(p.provider==='mercadopago' && (p.providerOrderId||p.requestBody) && !p.fulfilledAt && !terminalStatuses.has(p.status)){
+      try{await syncPayment(p);}catch(err){console.error('Payment sync:',err.message);}
+    }
+  }
+}
+if(require.main===module){
+  initDatabase().then(()=>{
+    app.listen(process.env.PORT||3000,()=>console.log('Rifa Certa iniciada'));
+    let reconciling=false;
+    setInterval(async()=>{
+      if(reconciling) return;
+      reconciling=true;
+      try{await reconcilePayments();}finally{reconciling=false;}
+    },15000).unref();
+  }).catch(err=>{console.error('Database startup:',err.message);process.exitCode=1;});
+}
+module.exports={app,initDatabase};
