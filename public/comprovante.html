@@ -117,70 +117,57 @@
 </div>
 
 <script>
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let carregando=false,encerrado=false;
 async function carregarComprovante(){
-  const id=new URLSearchParams(location.search).get('id');
+  if(carregando||encerrado) return;
+  carregando=true;
   const conteudo=document.getElementById('conteudo');
-
-  if(!id){
-    conteudo.innerHTML='<div class="erro">Comprovante inválido.</div>';
-    return;
-  }
-
-  const r=await fetch('/api/ticket/'+encodeURIComponent(id));
-  const d=await r.json();
-
-  if(!r.ok){
-    conteudo.innerHTML='<div class="erro">'+(d.error||'Comprovante não encontrado.')+'</div>';
-    return;
-  }
-
-  const status=d.status==='processed' ? 'PAGO / VENDIDO' : d.status;
-  const digitos={
-  grupo:2,
-  dezena:2,
-  centena:3,
-  milhar:4
-}[d.campaign?.type] || 0;
-
-const numerosFormatados=(d.numbers||[])
-  .map(n=>String(n).padStart(digitos,'0'))
-  .join(', ');
-  conteudo.innerHTML=`
-   <div class="${d.status==='processed'?'ok':'erro'}">
-${d.status==='processed'?'✅ Pagamento confirmado':'⏳ Pagamento ainda não confirmado'}
-</div>
-
-    <div class="linha"><strong>Campanha:</strong> ${d.campaign?.title||'-'}</div>
-    <div class="linha"><strong>Tipo:</strong> ${d.campaign?.type||'-'}</div>
-    <div class="linha"><strong>Cliente:</strong> ${d.name||'-'}</div>
-    <div class="linha"><strong>WhatsApp:</strong> ${d.phone||'-'}</div>
-
-    <div class="linha">
-      <strong>Números comprados:</strong>
-     <div class="numeros">${numerosFormatados}</div>
-    </div>
-
-    <div class="linha"><strong>Valor:</strong> R$ ${Number(d.amount||0).toFixed(2).replace('.',',')}</div>
-    <div class="linha"><strong>Status:</strong> ${status}</div>
-    <button onclick="compartilharComprovante()">Compartilhar comprovante</button>
-    <button onclick="window.print()">Imprimir / Salvar comprovante</button>
-  `;
+  try{
+    const id=new URLSearchParams(location.search).get('id');
+    if(!id) throw new Error('Comprovante inválido.');
+    const r=await fetch('/api/ticket/'+encodeURIComponent(id),{cache:'no-store'});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'Comprovante não encontrado.');
+    const paid=d.status==='processed'&&(d.provider==='mercadopago'?d.fulfillmentStatus==='sold':d.fulfillmentStatus!=='review_required');
+    const demo=d.provider==='demo';
+    const terminal=['canceled','expired','failed','refunded'].includes(d.status);
+    const type=d.campaign?.type;
+    const widths={grupo:2,dezena:2,centena:3,milhar:4};
+    const mod={dezena:100,centena:1000,milhar:10000}[type];
+    const numbers=(d.numbers||[]).map(n=>String(mod?Number(n)%mod:n).padStart(widths[type]||0,'0')).join(', ');
+    const status=d.fulfillmentStatus==='review_required'?'Pagamento recebido — aguarde conferência do responsável':
+      paid?(demo?'SIMULAÇÃO — SEM PAGAMENTO REAL':'PAGO / VENDIDO'):
+      terminal?'PEDIDO ENCERRADO — BILHETE NÃO VÁLIDO':'AGUARDANDO PAGAMENTO';
+    const date=d.campaign?.date;
+    const dateText=/^\d{4}-\d{2}-\d{2}$/.test(date||'')?date.split('-').reverse().join('/'):date||'Não informado';
+    conteudo.innerHTML=`
+      <div class="${paid?'ok':'erro'}">${esc(status)}</div>
+      <div class="linha"><strong>Campanha:</strong> ${esc(d.campaign?.title||'-')}</div>
+      <div class="linha"><strong>Tipo:</strong> ${esc(type||'-')}</div>
+      <div class="linha"><strong>Sorteio:</strong> ${esc(dateText)} às ${esc(d.campaign?.time||'Não informado')}</div>
+      <div class="linha"><strong>Cliente:</strong> ${esc(d.name||'-')}</div>
+      <div class="linha"><strong>WhatsApp:</strong> ${esc(d.phone||'-')}</div>
+      <div class="linha"><strong>${paid?'Números comprados':'Números do pedido'}:</strong><div class="numeros">${esc(numbers)}</div></div>
+      <div class="linha"><strong>Valor:</strong> R$ ${Number(d.amount||0).toFixed(2).replace('.',',')}</div>
+      <button onclick="compartilharComprovante()">Compartilhar comprovante</button>
+      <button onclick="window.print()">Imprimir / Salvar comprovante</button>
+      <p id="aviso" role="status"></p>`;
+    encerrado=paid||terminal||d.fulfillmentStatus==='review_required';
+  }catch(err){
+    conteudo.textContent=err.message||'Falha de conexão. Tentando novamente...';
+  }finally{carregando=false;}
 }
 async function compartilharComprovante(){
-  const url=location.href;
-
-  if(navigator.share){
-    await navigator.share({
-      title:'Comprovante Rifa Certa',
-      text:'Meu comprovante da Rifa Certa',
-      url
-    });
-  }else{
-    await navigator.clipboard.writeText(url);
-    alert('Link do comprovante copiado!');
-  }
+  try{
+    if(navigator.share){await navigator.share({title:'Comprovante Rifa Certa',text:'Meu comprovante da Rifa Certa',url:location.href});}
+    else{
+      window.open('https://wa.me/?text='+encodeURIComponent('Meu comprovante da Rifa Certa: '+location.href),'_blank','noopener');
+    }
+  }catch(err){if(err.name!=='AbortError') document.getElementById('aviso').textContent='Não foi possível compartilhar. Copie o endereço desta página.';}
 }
 carregarComprovante();
+setInterval(carregarComprovante,5000);
 </script>
 
 </body>

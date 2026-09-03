@@ -121,6 +121,8 @@ function showLogin(){loginBox.style.display='block';adminApp.style.display='none
 loginForm.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(loginForm));const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});const d=await r.json();if(!r.ok)return loginMsg.textContent=d.error;token=d.token;localStorage.setItem('rc_admin_token',token);loginMsg.textContent='';check();};
 logout.onclick=async()=>{await fetch('/api/admin/logout',{method:'POST',headers:auth()});token='';localStorage.removeItem('rc_admin_token');showLogin();};
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const formatNumber=(n,type)=>{const mod={dezena:100,centena:1000,milhar:10000}[type];return String(mod?Number(n)%mod:n).padStart({grupo:2,dezena:2,centena:3,milhar:4}[type]||0,'0');};
 async function refresh(){const cs=await fetch('/api/admin/campaigns',{headers:auth()}).then(r=>r.json());manualCampaign.innerHTML=cs.map(c=>'<option value="'+c.id+'">'+c.title+'</option>').join('');
 
 
@@ -129,7 +131,11 @@ const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 
 
 
-document.getElementById('payments').innerHTML=ps.length?ps.map(p=>'<div class="admin-card"><strong>'+money(p.amount)+'</strong><br>Status: '+(p.status==='processed'?'PAGO':(p.status||'-'))+'<br>Números: '+(p.numbers||[]).join(', ')+'<br>Nome: '+(p.name||'-')+'<br>WhatsApp: '+(p.phone||'-')+'</div>').join(''):'<p>Nenhum pagamento.</p>';
+document.getElementById('payments').innerHTML=ps.length?ps.map(p=>{
+  const c=cs.find(c=>c.id===p.campaignId);
+  const status=p.fulfillmentStatus==='review_required'?'PAGAMENTO RECEBIDO — CONFERIR NÚMEROS':p.status==='processed'?(p.provider==='demo'?'SIMULAÇÃO':'PAGO'):(p.status||'-');
+  return '<div class="admin-card"><strong>'+money(p.amount)+'</strong><br>Campanha: '+esc(c?.title||'-')+'<br>Tipo: '+esc(c?.type||'-')+'<br>Status: '+esc(status)+'<br>Números: '+esc((p.numbers||[]).map(n=>formatNumber(n,c?.type)).join(', '))+'<br>Nome: '+esc(p.name||'-')+'<br>WhatsApp: '+esc(p.phone||'-')+'</div>';
+}).join(''):'<p>Nenhum pagamento.</p>';
 }
 function abrirCampanha(id){
   window.open('/?campaign='+encodeURIComponent(id),'_blank');
@@ -169,9 +175,9 @@ if(r.ok){
   resultMessage.textContent=d.winners.length
     ? '🏆 GANHADORES\n\n'+d.winners.map(w=>
   w.position+'º - '+w.campaign+'\n'+w.name+' - '+w.phone+'\n'+
-(w.type==='centena'?'Centena: '+String(w.winningNumber).padStart(3,'0'):
- w.type==='dezena'?'Dezena: '+String(w.winningNumber).padStart(2,'0'):
- w.type==='grupo'?'Grupo: '+String(w.winningNumber).padStart(2,'0'):
+(w.type==='centena'?'Centena: '+formatNumber(w.winningNumber,w.type):
+ w.type==='dezena'?'Dezena: '+formatNumber(w.winningNumber,w.type):
+ w.type==='grupo'?'Grupo: '+formatNumber(w.winningNumber,w.type):
  'Número: '+w.winningNumber)+'\nPrêmio: R$ '+Number(w.prizeAmount||0).toFixed(2).replace('.',',')
 ).join('\n\n')
     : 'Resultado salvo. Nenhum ganhador.';
@@ -208,7 +214,7 @@ const rifa=manualCampaign.options[manualCampaign.selectedIndex].text;
 const tipo=d.type||'numeros';
 const rotulo=tipo==='centena'?'Centena':tipo==='dezena'?'Dezena':tipo==='grupo'?'Grupo':'Número';
 const casas=tipo==='centena'?3:(tipo==='dezena'||tipo==='grupo'?2:0);
-const numeroExibido=casas?String(d.number).padStart(casas,'0'):String(d.number);
+const numeroExibido=formatNumber(d.number,tipo);
 const dataExibida=d.date?d.date.split('-').reverse().join('/'):'';
 const bilhete=window.open('','_blank','width=400,height=600');
 bilhete.document.write(`

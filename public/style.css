@@ -10,3 +10,11 @@ header{height:72px;display:flex;align-items:center;justify-content:space-between
 @media(max-width:900px){.layout{grid-template-columns:1fr}.grid{grid-template-columns:repeat(3,1fr)}.hero{flex-direction:column}.panel-head{align-items:flex-start;flex-direction:column}}
 
 label{display:block;margin:14px 0;color:#cfe0d6;font-weight:700}input,select{display:block;width:100%;margin-top:7px;padding:13px;border-radius:10px;border:1px solid #315143;background:#0b1712;color:white}.admin-card{padding:14px 0;border-bottom:1px solid #22352c}.admin-card span{color:#9db2a7;font-size:14px}.admin-card b{color:#b6f43e}
+
+/* Checkout stays in normal document flow, including narrow WhatsApp browsers. */
+.cart{min-width:0}.cart input{font-size:16px;min-height:48px;touch-action:manipulation}
+#checkoutForm button{margin-top:16px}button:disabled{opacity:.6;cursor:default}
+#pixArea textarea{width:100%;min-height:100px;margin:10px 0;font-size:16px}
+.pix-qr{display:block;max-width:100%;width:220px;background:white;padding:8px;border-radius:10px}
+.receipt-link{display:block;margin-top:16px;color:#b6f43e;overflow-wrap:anywhere}
+@media(max-width:480px){.panel,.cart{padding:12px}.ticket{min-width:0}.meta{flex-wrap:wrap}.safe{font-size:12px}.brand{font-size:22px}}
