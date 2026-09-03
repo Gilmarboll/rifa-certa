@@ -6,8 +6,20 @@
 <form id="loginForm"><label>Usuário<input name="user" autocomplete="username" required></label><label>Senha<input name="password" type="password" autocomplete="current-password" required></label><button class="primary">Entrar</button></form><div id="loginMsg" class="msg"></div>
 </section>
 <div id="adminApp" style="display:none">
-<section class="hero"><div><span class="badge">PAINEL ADMINISTRATIVO</span><h1>Gerenciar campanhas</h1><p>Crie, pause e acompanhe suas campanhas.</p></div></section>
-<section class="layout"><div class="panel"><h2>Criar campanha</h2><form id="form">
+<section class="admin-heading"><div><span class="badge">PAINEL ADMINISTRATIVO</span><h1>Rifa Certa</h1><p>Escolha o que deseja fazer.</p></div></section>
+<nav class="admin-tabs" role="tablist" aria-label="Opções do painel">
+<button class="admin-tab active" type="button" role="tab" aria-selected="true" data-tab="campaignsTab">Campanhas</button>
+<button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="createTab">Criar campanha</button>
+<button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="manualTab">Registrar venda</button>
+<button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="resultsTab">Resultados e pagamentos</button>
+</nav>
+<section id="campaignsTab" class="admin-section active" role="tabpanel">
+<div class="section-title"><div><h2>Campanhas</h2><p>Abra, compartilhe, pause ou encerre uma campanha.</p></div><span id="campaignCount" class="count-pill">0</span></div>
+<div id="campaigns" class="campaign-list"></div>
+</section>
+<section id="createTab" class="admin-section" role="tabpanel" hidden>
+<div class="section-title"><div><h2>Criar campanha</h2><p>Preencha os dados da nova campanha.</p></div></div>
+<form id="form" class="admin-form">
 <label>Nome da campanha<input name="title" required></label><label>Prêmio<input name="prize" required></label>
 <label>Tipo<select name="type"><option value="numeros">Números</option><option value="dezena">Dezena</option><option value="centena">Centena</option><option value="grupo">Grupo</option></select></label><label>Data
 <input name="date" type="date" required>
@@ -15,7 +27,7 @@
 <label>Horário
 <input name="time" type="time" required>
 </label>
-<label>Até qual posição vale?
+<label class="wide-field">Até qual posição vale?
 <select name="maxPrizePosition" required>
 <option value="1">Só 1º prêmio</option>
 <option value="2">1º e 2º</option>
@@ -25,7 +37,7 @@
 </select>
 </label>
 
-<label>1º prêmio R$
+<div class="prize-fields wide-field"><label>1º prêmio R$
 <input name="prize1" type="number" min="0" step="0.01">
 </label>
 
@@ -44,13 +56,26 @@
 <label>5º prêmio R$
 <input name="prize5" type="number" min="0" step="0.01">
 </label>
+</div>
 <label>Foto do prêmio<input id="image" type="file" accept="image/jpeg,image/png,image/webp"></label>
 <label>Valor por número<input name="price" type="number" min="0.01" step="0.01" required></label><label>Quantidade<input name="totalTickets" type="number" min="1" max="10000" required></label>
-<button class="primary">Criar campanha</button></form><div id="msg" class="msg"></div></div>
-<aside class="cart"><h2>Campanhas</h2><div id="campaigns"></div>
-</aside><aside class="cart">
-<div class="panel">
-  <h2>Resultados</h2>
+<button class="primary wide-field">Criar campanha</button></form><div id="msg" class="msg"></div>
+</section>
+<section id="manualTab" class="admin-section" role="tabpanel" hidden>
+<div class="section-title"><div><h2>Registrar venda</h2><p>Marque uma venda feita pessoalmente.</p></div></div>
+<form id="manualSaleForm" class="admin-form">
+<label>Rifa<select id="manualCampaign" required></select></label>
+<label>Nome do cliente<input id="manualName" required></label>
+<label>WhatsApp<input id="manualPhone" type="tel"></label>
+<label>Número / Grupo / Dezena / Centena<input id="manualNumber" required></label>
+<label>Forma de pagamento<select id="manualPayment"><option value="dinheiro">Dinheiro</option><option value="pix">PIX</option></select></label>
+<button class="primary wide-field" type="submit">Marcar PAGO / VENDIDO</button>
+</form><div id="manualMsg" class="msg"></div>
+</section>
+<section id="resultsTab" class="admin-section" role="tabpanel" hidden>
+<div class="results-grid"><div>
+  <div class="section-title"><div><h2>Registrar resultados</h2><p>Informe o sorteio e confira os ganhadores.</p></div></div>
+  <div class="admin-form">
 <label>Data
 <input id="resultDate" type="date">
 </label>
@@ -81,39 +106,10 @@
   <button id="saveResults" class="primary">Salvar e conferir resultados</button>
 
   <div id="resultMessage" class="msg"></div>
-</div>
-
-<h2>Venda manual</h2>
-
-<form id="manualSaleForm">
-<label>Rifa
-<select id="manualCampaign" required></select>
-</label>
-
-<label>Nome do cliente
-<input id="manualName" required>
-</label>
-
-<label>WhatsApp
-<input id="manualPhone">
-</label>
-
-<label>Número / Grupo / Dezena / Centena
-<input id="manualNumber" required>
-</label>
-
-<label>Forma de pagamento
-<select id="manualPayment">
-<option value="dinheiro">Dinheiro</option>
-<option value="pix">PIX</option>
-</select>
-</label>
-
-<button class="primary" type="submit">Marcar PAGO / VENDIDO</button>
-</form>
-
-<div id="manualMsg" class="msg"></div>
-</aside><aside class="cart"><h2>Pagamentos</h2><div id="payments"></div></aside></section></div></main><script>
+</div></div>
+<div class="payments-column"><div class="section-title"><div><h2>Pagamentos</h2><p>Últimos pagamentos registrados.</p></div></div><div id="payments"></div></div>
+</div></section>
+</div></main><script>
 let token=localStorage.getItem('rc_admin_token')||'';
 const auth=()=>({'Content-Type':'application/json','Authorization':'Bearer '+token});
 async function check(){if(!token)return showLogin();const r=await fetch('/api/admin/me',{headers:auth()});if(!r.ok){token='';localStorage.removeItem('rc_admin_token');return showLogin();}loginBox.style.display='none';adminApp.style.display='block';logout.style.display='inline-block';refresh();}
@@ -123,10 +119,24 @@ logout.onclick=async()=>{await fetch('/api/admin/logout',{method:'POST',headers:
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const formatNumber=(n,type)=>{const mod={dezena:100,centena:1000,milhar:10000}[type];return String(mod?Number(n)%mod:n).padStart({grupo:2,dezena:2,centena:3,milhar:4}[type]||0,'0');};
+document.querySelectorAll('.admin-tab').forEach(button=>button.addEventListener('click',()=>{
+  document.querySelectorAll('.admin-tab').forEach(tab=>{
+    const selected=tab===button;
+    tab.classList.toggle('active',selected);
+    tab.setAttribute('aria-selected',String(selected));
+  });
+  document.querySelectorAll('.admin-section').forEach(section=>{
+    const selected=section.id===button.dataset.tab;
+    section.classList.toggle('active',selected);
+    section.hidden=!selected;
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}));
 async function refresh(){const cs=await fetch('/api/admin/campaigns',{headers:auth()}).then(r=>r.json());manualCampaign.innerHTML=cs.map(c=>'<option value="'+c.id+'">'+c.title+'</option>').join('');
 
 
-campaigns.innerHTML=cs.map(c=>`<div class="admin-card"><strong>${c.title}</strong><br><span>${c.type} • ${c.sold.length}/${c.totalTickets} vendidos • ${c.status}</span><br><b>${money(c.price)}</b><div style="margin-top:8px"><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button> <button class="secondary" onclick="statusChange('${c.id}','encerrada')">Encerrar</button><button class="secondary" onclick="abrirCampanha('${c.id}')">Abrir campanha</button> <button class="secondary" onclick="copiarLink('${c.id}')">Copiar link</button></div></div>`).join('');
+campaignCount.textContent=cs.length;
+campaigns.innerHTML=cs.length?cs.map(c=>`<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${c.sold.length}/${c.totalTickets} vendidos</p></div><strong>${money(c.price)}</strong></div><div class="campaign-actions"><button class="secondary" onclick="abrirCampanha('${c.id}')">Abrir</button><button class="secondary" onclick="copiarLink('${c.id}')">Copiar link</button><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button><button class="secondary danger" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></article>`).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
 const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 
 
