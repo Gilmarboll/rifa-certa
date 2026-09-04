@@ -15,6 +15,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'troque-esta-senha';
 const ADMIN_TOKEN = crypto.createHash('sha256').update(ADMIN_USER+':'+ADMIN_PASSWORD).digest('hex');
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || '';
 const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET || '';
+const SUPPORT_WHATSAPP = String(process.env.SUPPORT_WHATSAPP || '5548984409772').replace(/\D/g,'');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const sessions = new Map();
 
@@ -164,6 +165,7 @@ app.get('/api/campaigns',(req,res)=>{
   save(db);
   res.json(db.campaigns.filter(c=>c.status==='ativa').map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
 });
+app.get('/api/public-config',(req,res)=>res.json({supportWhatsApp:SUPPORT_WHATSAPP}));
 app.get('/api/campaign/:id',(req,res)=>{
   const db=load();
   const c=db.campaigns.find(x=>x.id===req.params.id);
@@ -206,7 +208,31 @@ app.get('/api/admin/campaigns',requireAdmin,(req,res)=>{
   const db=load(); db.campaigns.forEach(clean); save(db);
   res.json(db.campaigns.map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
 });
-app.get('/api/admin/payments',requireAdmin,(req,res)=>{ const db=load(); res.json(db.payments||[]); });
+app.get('/api/admin/payments',requireAdmin,(req,res)=>{ const db=load(); res.json([...(db.payments||[])].reverse()); });
+app.get('/api/admin/results',requireAdmin,(req,res)=>{
+  const db=load(); res.json([...(db.results||[])].reverse());
+});
+app.get('/api/winner/:id',(req,res)=>{
+  const db=load();
+  for(const result of db.results||[]){
+    const winner=(result.winners||[]).find(w=>w.id===req.params.id);
+    if(winner) return res.json({...winner,date:result.date,time:result.time,prizePaid:Boolean(winner.prizePaid)});
+  }
+  res.status(404).json({error:'Comprovante de ganhador não encontrado.'});
+});
+app.patch('/api/admin/winner/:id/paid',requireAdmin,asyncRoute(async(req,res)=>{
+  const db=load();
+  for(const result of db.results||[]){
+    const winner=(result.winners||[]).find(w=>w.id===req.params.id);
+    if(winner){
+      winner.prizePaid=Boolean(req.body.paid);
+      winner.prizePaidAt=winner.prizePaid?new Date().toISOString():null;
+      await save(db);
+      return res.json({ok:true,winner});
+    }
+  }
+  res.status(404).json({error:'Ganhador não encontrado.'});
+}));
 app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
   const {campaignId,name,phone,number,paymentMethod}=req.body;
   let n=Number(number);
@@ -290,6 +316,7 @@ if(prizeAmount<=0) return;
         .filter(p=>p.campaignId===c.id && (p.numbers||[]).map(Number).includes(winningNumber))
         .forEach(p=>{
           winners.push({
+            id:crypto.randomUUID(),
             position:pos+1,
             result,
             campaignId:c.id,
@@ -298,7 +325,8 @@ if(prizeAmount<=0) return;
             winningNumber,
            prizeAmount,
             name:p.name||'',
-            phone:p.phone||''
+            phone:p.phone||'',
+            prizePaid:false
           });
         });
     });
@@ -553,6 +581,14 @@ if(result.rows.length){
       p.fulfilledAt=p.paidAt||p.createdAt;p.fulfillmentStatus='sold';
     }
   }
+  state.results=state.results||[];
+  for(const result of state.results){
+    for(const winner of result.winners||[]){
+      winner.id=winner.id||crypto.randomUUID();
+      winner.prizePaid=Boolean(winner.prizePaid);
+    }
+  }
+  await save(state);
 }else{
   await pool.query('INSERT INTO app_state (id,data) VALUES (1,$1)', [state]);
 }
