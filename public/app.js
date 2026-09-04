@@ -266,6 +266,15 @@ async function createPix(){
 function showError(err){
   const target=$('checkoutError')||$('msg');target.textContent=err.message||'Não foi possível carregar. Atualize a página.';
 }
+function showNoCampaign(message){
+  $('title').textContent='Nenhuma campanha ativa';
+  $('prize').textContent=message||'Volte em breve para participar.';
+  $('price').textContent='';$('progress').textContent='';
+  $('grid').innerHTML='<p class="empty-state" style="grid-column:1/-1">No momento não há campanha disponível.</p>';
+  $('randomBtn').style.display='none';$('reserveBtn').style.display='none';
+  $('selectedList').textContent='Aguarde a próxima campanha.';
+  $('msg').textContent='';
+}
 async function start(){
   $('reserveBtn').disabled=true;$('randomBtn').disabled=true;
   try{
@@ -276,7 +285,10 @@ async function start(){
       updateCart();await checkReservation();
     }
     const last=storage.get('ultimoComprovante');if(last) keepReceipt({paymentId:last});
-  }catch(err){showError(err);}
+  }catch(err){
+    if(err.message==='Nenhuma campanha ativa. Volte em breve.'||err.message==='Esta campanha não está disponível.') showNoCampaign(err.message);
+    else showError(err);
+  }
 }
 setInterval(tick,1000);
 setInterval(checkReservation,5000);
