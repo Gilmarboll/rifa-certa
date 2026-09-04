@@ -1,11 +1,10 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
 const { Pool } = require('pg');
 const app = express();
-app.use(express.json({limit:'2mb'}));
+app.use(express.json({limit:'8mb'}));
 app.use(express.static(path.join(__dirname,'public')));
 app.use('/api', (req,res,next)=>{ res.set('Cache-Control','no-store'); next(); });
 
@@ -19,16 +18,8 @@ const SUPPORT_WHATSAPP = String(process.env.SUPPORT_WHATSAPP || '5548984409772')
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const sessions = new Map();
 
-const uploadDir = path.join(__dirname,'uploads');
-if(!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-app.use('/uploads', express.static(uploadDir));
-
-const storage = multer.diskStorage({
-  destination:(req,file,cb)=>cb(null,uploadDir),
-  filename:(req,file,cb)=>cb(null,Date.now()+'-'+crypto.randomBytes(5).toString('hex')+path.extname(file.originalname).toLowerCase())
-});
 const upload = multer({
-  storage,
+  storage:multer.memoryStorage(),
   limits:{fileSize:5*1024*1024},
   fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp'].includes(file.mimetype))
 });
@@ -202,8 +193,19 @@ app.get('/api/ticket/:id',(req,res)=>{
 });
 app.post('/api/admin/upload',requireAdmin,upload.single('image'),(req,res)=>{
   if(!req.file) return res.status(400).json({error:'Envie JPG, PNG ou WEBP de até 5 MB.'});
-  res.json({url:'/uploads/'+req.file.filename});
+  res.json({url:`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`});
 });
+app.patch('/api/admin/campaign/:id/image',requireAdmin,asyncRoute(async(req,res)=>{
+  const imageUrl=String(req.body.imageUrl||'');
+  if(!/^data:image\/(jpeg|png|webp);base64,/.test(imageUrl))
+    return res.status(400).json({error:'Imagem inválida.'});
+  const db=load();
+  const c=db.campaigns.find(x=>x.id===req.params.id);
+  if(!c) return res.status(404).json({error:'Campanha não encontrada.'});
+  c.imageUrl=imageUrl;
+  await save(db);
+  res.json({ok:true});
+}));
 app.get('/api/admin/campaigns',requireAdmin,(req,res)=>{
   const db=load(); db.campaigns.forEach(clean); save(db);
   res.json(db.campaigns.map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
