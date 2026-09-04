@@ -37,6 +37,16 @@ async function load(){
   $('prize').textContent=campaign.prize;
   $('price').textContent=money(campaign.price)+' por número';
   $('progress').textContent=`${campaign.sold.length} vendidos de ${campaign.totalTickets}`;
+  const prizeCard=$('prizeCard');
+  const prizeImage=$('prizeImage');
+  if(campaign.imageUrl){
+    prizeImage.src=campaign.imageUrl;
+    prizeImage.alt='Foto do prêmio: '+campaign.prize;
+    prizeCard.hidden=false;
+  }else{
+    prizeImage.removeAttribute('src');
+    prizeCard.hidden=true;
+  }
   draw();
 }
 const grupos=[['Avestruz','🐦'],['Águia','🦅'],['Burro','🫏'],['Borboleta','🦋'],['Cachorro','🐶'],['Cabra','🐐'],['Carneiro','🐏'],['Camelo','🐪'],['Cobra','🐍'],['Coelho','🐰'],['Cavalo','🐴'],['Elefante','🐘'],['Galo','🐓'],['Gato','🐱'],['Jacaré','🐊'],['Leão','🦁'],['Macaco','🐒'],['Porco','🐷'],['Pavão','🦚'],['Peru','🦃'],['Touro','🐂'],['Tigre','🐯'],['Urso','🐻'],['Veado','🦌'],['Vaca','🐄']];
@@ -267,6 +277,10 @@ function showError(err){
   const target=$('checkoutError')||$('msg');target.textContent=err.message||'Não foi possível carregar. Atualize a página.';
 }
 function showNoCampaign(message){
+  const prizeCard=$('prizeCard');
+  const prizeImage=$('prizeImage');
+  prizeCard.hidden=true;
+  prizeImage.removeAttribute('src');
   $('title').textContent='Nenhuma campanha ativa';
   $('prize').textContent=message||'Volte em breve para participar.';
   $('price').textContent='';$('progress').textContent='';
