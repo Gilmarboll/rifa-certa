@@ -139,7 +139,7 @@ manualCampaign.innerHTML=cs.map(c=>'<option value="'+c.id+'">'+esc(c.title)+'</o
 
 
 campaignCount.textContent=cs.length;
-campaigns.innerHTML=cs.length?cs.map(c=>`<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${c.sold.length}/${c.totalTickets} vendidos</p></div><strong>${money(c.price)}</strong></div><div class="campaign-actions"><button class="secondary" onclick="abrirCampanha('${c.id}')">Abrir</button><button class="secondary" onclick="copiarLink('${c.id}')">Copiar link</button><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button><button class="secondary danger" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></article>`).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
+campaigns.innerHTML=cs.length?cs.map(c=>`<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${c.sold.length}/${c.totalTickets} vendidos</p></div><strong>${money(c.price)}</strong></div><div class="campaign-actions"><button class="secondary" onclick="abrirCampanha('${c.id}')">Abrir</button><button class="secondary" onclick="copiarLink('${c.id}')">Copiar link</button><button class="secondary" onclick="trocarFoto('${c.id}')">Colocar foto</button><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button><button class="secondary danger" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></article>`).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
 const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 
 
@@ -166,6 +166,21 @@ async function copiarLink(id){
   alert('Link copiado!');
 }
 async function statusChange(id,status){const r=await fetch('/api/admin/campaign/'+id+'/status',{method:'PATCH',headers:auth(),body:JSON.stringify({status})});if(r.ok)refresh();}
+function trocarFoto(id){
+  const input=document.createElement('input');
+  input.type='file';input.accept='image/jpeg,image/png,image/webp';
+  input.onchange=async()=>{
+    if(!input.files[0]) return;
+    const fd=new FormData();fd.append('image',input.files[0]);
+    const ur=await fetch('/api/admin/upload',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
+    const ud=await ur.json();
+    if(!ur.ok) return alert(ud.error||'Erro ao enviar a foto.');
+    const r=await fetch('/api/admin/campaign/'+id+'/image',{method:'PATCH',headers:auth(),body:JSON.stringify({imageUrl:ud.url})});
+    alert(r.ok?'Foto salva com sucesso!':'Não foi possível salvar a foto.');
+    if(r.ok) refresh();
+  };
+  input.click();
+}
 function abrirGanhador(id){window.open('/ganhador.html?id='+encodeURIComponent(id),'_blank');}
 async function copiarGanhador(id){
   const link=location.origin+'/ganhador.html?id='+encodeURIComponent(id);
