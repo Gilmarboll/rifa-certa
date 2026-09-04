@@ -4,6 +4,11 @@ let currentReservation=null;
 
 const $=id=>document.getElementById(id);
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const campaignTypeLabel=type=>({grupo:'grupo',dezena:'dezena',centena:'centena',milhar:'milhar',numeros:'número'}[type]||'número');
+const formatDate=value=>{
+  const parts=String(value||'').split('-');
+  return parts.length===3?`${parts[2]}/${parts[1]}/${parts[0]}`:String(value||'');
+};
 
 const formatNumber=(n,type=campaign?.type)=>{
   const widths={grupo:2,dezena:2,centena:3,milhar:4};
@@ -33,9 +38,13 @@ async function load(){
   if(wanted && !cs.some(c=>c.id===wanted)) throw new Error('Esta campanha não está disponível.');
   if(!cs.length) throw new Error('Nenhuma campanha ativa. Volte em breve.');
   campaign=cs.find(c=>c.id===wanted)||cs[0];
-  $('title').textContent=campaign.title;
-  $('prize').textContent=campaign.prize;
-  $('price').textContent=money(campaign.price)+' por número';
+  $('title').textContent=String(campaign.title||'').replace(/-{2,}/g,' – ').replace(/\s+/g,' ').trim();
+  const prizeText=String(campaign.prize||'');
+  $('prize').textContent='Prêmio: '+(/^R\$/i.test(prizeText)?prizeText:(/^\d/.test(prizeText)?'R$ '+prizeText:prizeText));
+  $('drawInfo').textContent=`Sorteio: ${formatDate(campaign.date)} às ${campaign.time||'--:--'}`;
+  const maxPosition=Number(campaign.maxPrizePosition||1);
+  $('ruleInfo').textContent=maxPosition===1?'Válido pelo 1º prêmio':`Válido do 1º ao ${maxPosition}º prêmio`;
+  $('price').textContent=money(campaign.price)+' por '+campaignTypeLabel(campaign.type);
   $('progress').textContent=`${campaign.sold.length} vendidos de ${campaign.totalTickets}`;
   const prizeCard=$('prizeCard');
   const prizeImage=$('prizeImage');
@@ -283,6 +292,7 @@ function showNoCampaign(message){
   prizeImage.removeAttribute('src');
   $('title').textContent='Nenhuma campanha ativa';
   $('prize').textContent=message||'Volte em breve para participar.';
+  $('drawInfo').textContent='';$('ruleInfo').textContent='';
   $('price').textContent='';$('progress').textContent='';
   $('grid').innerHTML='<p class="empty-state" style="grid-column:1/-1">No momento não há campanha disponível.</p>';
   $('randomBtn').style.display='none';$('reserveBtn').style.display='none';
