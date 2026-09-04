@@ -106,6 +106,7 @@
   <button id="saveResults" class="primary">Salvar e conferir resultados</button>
 
   <div id="resultMessage" class="msg"></div>
+  <div id="winnerHistory" class="winner-history"></div>
 </div></div>
 <div class="payments-column"><div class="section-title"><div><h2>Pagamentos</h2><p>Últimos pagamentos registrados.</p></div></div><div id="payments"></div></div>
 </div></section>
@@ -132,7 +133,9 @@ document.querySelectorAll('.admin-tab').forEach(button=>button.addEventListener(
   });
   window.scrollTo({top:0,behavior:'smooth'});
 }));
-async function refresh(){const cs=await fetch('/api/admin/campaigns',{headers:auth()}).then(r=>r.json());manualCampaign.innerHTML=cs.map(c=>'<option value="'+c.id+'">'+c.title+'</option>').join('');
+async function refresh(){let cs=await fetch('/api/admin/campaigns',{headers:auth()}).then(r=>r.json());
+cs=[...cs].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+manualCampaign.innerHTML=cs.map(c=>'<option value="'+c.id+'">'+esc(c.title)+'</option>').join('');
 
 
 campaignCount.textContent=cs.length;
@@ -146,6 +149,13 @@ document.getElementById('payments').innerHTML=ps.length?ps.map(p=>{
   const status=p.fulfillmentStatus==='review_required'?'PAGAMENTO RECEBIDO — CONFERIR NÚMEROS':p.status==='processed'?(p.provider==='demo'?'SIMULAÇÃO':'PAGO'):(p.status||'-');
   return '<div class="admin-card"><strong>'+money(p.amount)+'</strong><br>Campanha: '+esc(c?.title||'-')+'<br>Tipo: '+esc(c?.type||'-')+'<br>Status: '+esc(status)+'<br>Números: '+esc((p.numbers||[]).map(n=>formatNumber(n,c?.type)).join(', '))+'<br>Nome: '+esc(p.name||'-')+'<br>WhatsApp: '+esc(p.phone||'-')+'</div>';
 }).join(''):'<p>Nenhum pagamento.</p>';
+const resultHistoryRaw=await fetch('/api/admin/results',{headers:auth()}).then(r=>r.json());
+const resultHistory=Array.isArray(resultHistoryRaw)?resultHistoryRaw:[];
+const winners=resultHistory.flatMap(result=>(result.winners||[]).map(w=>({...w,date:result.date,time:result.time})));
+winnerHistory.innerHTML=winners.length?'<h3>Ganhadores</h3>'+winners.map(w=>{
+  const link=location.origin+'/ganhador.html?id='+encodeURIComponent(w.id);
+  return `<article class="winner-card"><div><b>🏆 ${esc(w.name||'-')}</b><br>${esc(w.position)}º resultado • ${esc(w.campaign)}<br>${w.type==='grupo'?'Grupo':w.type==='centena'?'Centena':w.type==='dezena'?'Dezena':'Número'}: ${esc(formatNumber(w.winningNumber,w.type))}<br>Prêmio: ${money(w.prizeAmount||0)}<br><span class="${w.prizePaid?'winner-paid':'winner-pending'}">${w.prizePaid?'PRÊMIO PAGO':'AGUARDANDO PAGAMENTO DO PRÊMIO'}</span></div><div class="winner-actions"><button class="secondary" onclick="abrirGanhador('${esc(w.id)}')">Ver comprovante</button><button class="secondary" onclick="copiarGanhador('${esc(w.id)}')">Compartilhar</button><button class="primary" onclick="marcarPremio('${esc(w.id)}',${!w.prizePaid})">${w.prizePaid?'Desmarcar pagamento':'Marcar prêmio pago'}</button></div></article>`;
+}).join(''):'<p class="empty-state">Nenhum ganhador registrado.</p>';
 }
 function abrirCampanha(id){
   window.open('/?campaign='+encodeURIComponent(id),'_blank');
@@ -156,6 +166,18 @@ async function copiarLink(id){
   alert('Link copiado!');
 }
 async function statusChange(id,status){const r=await fetch('/api/admin/campaign/'+id+'/status',{method:'PATCH',headers:auth(),body:JSON.stringify({status})});if(r.ok)refresh();}
+function abrirGanhador(id){window.open('/ganhador.html?id='+encodeURIComponent(id),'_blank');}
+async function copiarGanhador(id){
+  const link=location.origin+'/ganhador.html?id='+encodeURIComponent(id);
+  if(navigator.share) return navigator.share({title:'Ganhador da Rifa Certa',text:'Confira o ganhador da Rifa Certa',url:link}).catch(()=>{});
+  await navigator.clipboard.writeText(link);alert('Link do ganhador copiado!');
+}
+async function marcarPremio(id,paid){
+  const texto=paid?'Confirmar que o prêmio foi pago?':'Desmarcar o pagamento deste prêmio?';
+  if(!confirm(texto)) return;
+  const r=await fetch('/api/admin/winner/'+encodeURIComponent(id)+'/paid',{method:'PATCH',headers:auth(),body:JSON.stringify({paid})});
+  if(r.ok) refresh(); else alert('Não foi possível atualizar o prêmio.');
+}
 form.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(form));delete o.image; if(image.files[0]){const fd=new FormData();fd.append('image',image.files[0]);const ur=await fetch('/api/admin/upload',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});const ud=await ur.json();if(!ur.ok){msg.textContent=ud.error||'Erro no upload';return;}o.imageUrl=ud.url;}const r=await fetch('/api/admin/campaigns',{method:'POST',headers:auth(),body:JSON.stringify(o)});const d=await r.json();msg.textContent=r.ok?'Campanha criada com sucesso!':d.error;if(r.ok){form.reset();refresh();}};
 saveResults.onclick=async()=>{
   const body={
@@ -191,6 +213,7 @@ if(r.ok){
  'Número: '+w.winningNumber)+'\nPrêmio: R$ '+Number(w.prizeAmount||0).toFixed(2).replace('.',',')
 ).join('\n\n')
     : 'Resultado salvo. Nenhum ganhador.';
+  refresh();
 }else{
   resultMessage.textContent=d.error||'Erro ao salvar resultado';
 }
