@@ -9,6 +9,7 @@
 <section class="admin-heading"><div><span class="badge">PAINEL ADMINISTRATIVO</span><h1>Rifa Certa</h1><p>Escolha o que deseja fazer.</p></div></section>
 <nav class="admin-tabs" role="tablist" aria-label="Opções do painel">
 <button class="admin-tab active" type="button" role="tab" aria-selected="true" data-tab="campaignsTab">Campanhas</button>
+<button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="salesTab">Controle de vendas</button>
 <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="createTab">Criar campanha</button>
 <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="manualTab">Registrar venda</button>
 <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="resultsTab">Resultados e pagamentos</button>
@@ -16,6 +17,10 @@
 <section id="campaignsTab" class="admin-section active" role="tabpanel">
 <div class="section-title"><div><h2>Campanhas</h2><p>Abra, compartilhe, pause ou encerre uma campanha.</p></div><span id="campaignCount" class="count-pill">0</span></div>
 <div id="campaigns" class="campaign-list"></div>
+</section>
+<section id="salesTab" class="admin-section" role="tabpanel" hidden>
+<div class="section-title"><div><h2>Controle de vendas</h2><p>Acompanhe vendas, reservas e valores de cada campanha.</p></div></div>
+<div id="salesControl" class="campaign-list"></div>
 </section>
 <section id="createTab" class="admin-section" role="tabpanel" hidden>
 <div class="section-title"><div><h2>Criar campanha</h2><p>Preencha os dados da nova campanha.</p></div></div>
@@ -120,6 +125,16 @@ logout.onclick=async()=>{await fetch('/api/admin/logout',{method:'POST',headers:
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const formatNumber=(n,type)=>{const mod={dezena:100,centena:1000,milhar:10000}[type];return String(mod?Number(n)%mod:n).padStart({grupo:2,dezena:2,centena:3,milhar:4}[type]||0,'0');};
+const reservationTime=expiresAt=>{
+  const seconds=Math.max(0,Math.ceil((Number(expiresAt)-Date.now())/1000));
+  return Math.floor(seconds/60)+'min '+String(seconds%60).padStart(2,'0')+'s';
+};
+const paymentStatus=p=>{
+  if(p.fulfillmentStatus==='review_required') return ['PAGAMENTO RECEBIDO — CONFERIR','payment-expired'];
+  if(p.status==='processed') return [p.provider==='demo'?'SIMULAÇÃO':'PAGO','payment-paid'];
+  if(Number(p.expiresAt)<=Date.now() || ['canceled','expired','failed','refunded'].includes(p.status)) return ['EXPIRADO / CANCELADO','payment-expired'];
+  return ['AGUARDANDO PAGAMENTO','payment-waiting'];
+};
 document.querySelectorAll('.admin-tab').forEach(button=>button.addEventListener('click',()=>{
   document.querySelectorAll('.admin-tab').forEach(tab=>{
     const selected=tab===button;
@@ -139,15 +154,24 @@ manualCampaign.innerHTML=cs.map(c=>'<option value="'+c.id+'">'+esc(c.title)+'</o
 
 
 campaignCount.textContent=cs.length;
-campaigns.innerHTML=cs.length?cs.map(c=>`<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${c.sold.length}/${c.totalTickets} vendidos</p></div><strong>${money(c.price)}</strong></div><div class="campaign-actions"><button class="secondary" onclick="abrirCampanha('${c.id}')">Abrir</button><button class="secondary" onclick="copiarLink('${c.id}')">Copiar link</button><button class="secondary" onclick="trocarFoto('${c.id}')">Colocar foto</button><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button><button class="secondary danger" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></article>`).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
+campaigns.innerHTML=cs.length?cs.map(c=>{
+  const sold=c.sold||[];
+  return `<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${sold.length}/${c.totalTickets} vendidos</p></div><strong>${money(c.price)}</strong></div><div class="campaign-actions"><button class="secondary" onclick="abrirCampanha('${c.id}')">Abrir</button><button class="secondary" onclick="copiarLink('${c.id}')">Copiar link</button><button class="secondary" onclick="trocarFoto('${c.id}')">Colocar foto</button><button class="secondary" onclick="statusChange('${c.id}','${c.status==='ativa'?'pausada':'ativa'}')">${c.status==='ativa'?'Pausar':'Ativar'}</button><button class="secondary danger" onclick="statusChange('${c.id}','encerrada')">Encerrar</button></div></article>`;
+}).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
+salesControl.innerHTML=cs.length?cs.map(c=>{
+  const sold=c.sold||[], reserved=c.reservations||[];
+  const s=c.stats||{sold:sold.length,reserved:reserved.length,available:c.totalTickets-sold.length-reserved.length,remaining:c.totalTickets-sold.length,received:sold.length*c.price,remainingValue:(c.totalTickets-sold.length)*c.price};
+  const reservations=(c.reservationDetails||[]).map(r=>`<div class="reservation-box"><b>RESERVADO — ${reservationTime(r.expiresAt)}</b><p>Números: ${esc((r.numbers||[]).sort((a,b)=>a-b).map(n=>formatNumber(n,c.type)).join(', '))}<br>Cliente: ${esc(r.name||'ainda preenchendo')}<br>WhatsApp: ${esc(r.phone||'-')}<br>Valor: ${money(r.amount||0)}</p></div>`).join('');
+  return `<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${money(c.price)} cada</p></div></div><div class="campaign-stats"><div class="stat-box"><small>Vendidos</small><strong>${s.sold}</strong></div><div class="stat-box"><small>Reservados</small><strong>${s.reserved}</strong></div><div class="stat-box"><small>Disponíveis</small><strong>${s.available}</strong></div><div class="stat-box"><small>Total recebido</small><strong>${money(s.received)}</strong></div><div class="stat-box"><small>Falta vender</small><strong>${s.remaining}</strong></div><div class="stat-box"><small>Valor restante</small><strong>${money(s.remainingValue)}</strong></div></div>${reservations||'<p class="no-reservations">Nenhuma reserva aguardando pagamento.</p>'}</article>`;
+}).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
 const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 
 
 
 document.getElementById('payments').innerHTML=ps.length?ps.map(p=>{
   const c=cs.find(c=>c.id===p.campaignId);
-  const status=p.fulfillmentStatus==='review_required'?'PAGAMENTO RECEBIDO — CONFERIR NÚMEROS':p.status==='processed'?(p.provider==='demo'?'SIMULAÇÃO':'PAGO'):(p.status||'-');
-  return '<div class="admin-card"><strong>'+money(p.amount)+'</strong><br>Campanha: '+esc(c?.title||'-')+'<br>Tipo: '+esc(c?.type||'-')+'<br>Status: '+esc(status)+'<br>Números: '+esc((p.numbers||[]).map(n=>formatNumber(n,c?.type)).join(', '))+'<br>Nome: '+esc(p.name||'-')+'<br>WhatsApp: '+esc(p.phone||'-')+'</div>';
+  const [status,statusClass]=paymentStatus(p);
+  return '<div class="admin-card"><strong>'+money(p.amount)+'</strong><br><span class="payment-status '+statusClass+'">'+esc(status)+'</span><br>Campanha: '+esc(c?.title||'-')+'<br>Tipo: '+esc(c?.type||'-')+'<br>Números: '+esc((p.numbers||[]).map(n=>formatNumber(n,c?.type)).join(', '))+'<br>Nome: '+esc(p.name||'-')+'<br>WhatsApp: '+esc(p.phone||'-')+'</div>';
 }).join(''):'<p>Nenhum pagamento.</p>';
 const resultHistoryRaw=await fetch('/api/admin/results',{headers:auth()}).then(r=>r.json());
 const resultHistory=Array.isArray(resultHistoryRaw)?resultHistoryRaw:[];
@@ -292,4 +316,9 @@ bilhete.print();
   }
 };
 check();
+setInterval(()=>{
+  if(!token||document.hidden) return;
+  const active=document.querySelector('.admin-tab.active')?.dataset.tab;
+  if(active==='campaignsTab'||active==='salesTab'||active==='resultsTab') refresh();
+},5000);
 </script></body></html>

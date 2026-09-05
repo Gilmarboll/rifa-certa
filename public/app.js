@@ -27,7 +27,7 @@ async function api(url,options){
   if(!r.ok) throw Object.assign(new Error(data.error||'Não foi possível carregar. Tente novamente.'),{status:r.status});
   return data;
 }
-let busy=false, checking=false, payerDraft={}, payment=null, renderedPayment='';
+let busy=false, checking=false, availabilityChecking=false, payerDraft={}, payment=null, renderedPayment='';
 function reservationKey(){return 'rifaCerta:reserva:'+campaign.id;}
 function rememberReservation(){
   if(currentReservation) storage.set(reservationKey(),JSON.stringify({reservationId:currentReservation.reservationId,payer:payerDraft}));
@@ -57,6 +57,22 @@ async function load(){
     prizeCard.hidden=true;
   }
   draw();
+}
+async function refreshCampaignAvailability(){
+  if(!campaign||currentReservation||busy||availabilityChecking) return;
+  availabilityChecking=true;
+  try{
+    const latest=await api('/api/campaign/'+encodeURIComponent(campaign.id));
+    campaign.sold=latest.sold||[];
+    campaign.reservations=latest.reservations||[];
+    for(const n of [...selected]){
+      if(campaign.sold.includes(n)||campaign.reservations.includes(n)) selected.delete(n);
+    }
+    $('progress').textContent=`${campaign.sold.length} vendidos de ${campaign.totalTickets}`;
+    draw();
+  }catch(err){
+    if(err.status===404) location.reload();
+  }finally{availabilityChecking=false;}
 }
 const grupos=[['Avestruz','🐦'],['Águia','🦅'],['Burro','🫏'],['Borboleta','🦋'],['Cachorro','🐶'],['Cabra','🐐'],['Carneiro','🐏'],['Camelo','🐪'],['Cobra','🐍'],['Coelho','🐰'],['Cavalo','🐴'],['Elefante','🐘'],['Galo','🐓'],['Gato','🐱'],['Jacaré','🐊'],['Leão','🦁'],['Macaco','🐒'],['Porco','🐷'],['Pavão','🦚'],['Peru','🦃'],['Touro','🐂'],['Tigre','🐯'],['Urso','🐻'],['Veado','🦌'],['Vaca','🐄']];
 function draw(){
@@ -316,5 +332,6 @@ async function start(){
 }
 setInterval(tick,1000);
 setInterval(checkReservation,5000);
+setInterval(refreshCampaignAvailability,5000);
 window.addEventListener('pageshow',()=>{if(campaign) checkReservation();});
 start();
