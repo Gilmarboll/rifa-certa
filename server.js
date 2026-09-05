@@ -208,7 +208,34 @@ app.patch('/api/admin/campaign/:id/image',requireAdmin,asyncRoute(async(req,res)
 }));
 app.get('/api/admin/campaigns',requireAdmin,(req,res)=>{
   const db=load(); db.campaigns.forEach(clean); save(db);
-  res.json(db.campaigns.map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
+  res.json(db.campaigns.map(c=>{
+    const grouped=new Map();
+    for(const [number,reservation] of Object.entries(c.reservations||{})){
+      const current=grouped.get(reservation.reservationId)||{
+        reservationId:reservation.reservationId,
+        numbers:[],
+        expiresAt:reservation.expiresAt
+      };
+      current.numbers.push(Number(number));
+      current.expiresAt=Math.min(current.expiresAt,reservation.expiresAt);
+      grouped.set(reservation.reservationId,current);
+    }
+    const reservationDetails=[...grouped.values()].map(reservation=>{
+      const payment=(db.payments||[]).find(p=>p.reservationId===reservation.reservationId);
+      return {...reservation,name:payment?.name||'',phone:payment?.phone||'',amount:payment?.amount??reservation.numbers.length*c.price,status:payment?.status||'reserved'};
+    });
+    const received=(db.payments||[])
+      .filter(p=>p.campaignId===c.id && p.status==='processed' && p.fulfillmentStatus!=='review_required')
+      .reduce((total,p)=>total+Number(p.amount||0),0);
+    return {...c,
+      reservations:Object.keys(c.reservations||{}).map(Number),
+      reservationDetails,
+      stats:{sold:c.sold.length,reserved:Object.keys(c.reservations||{}).length,
+        available:Math.max(0,c.totalTickets-c.sold.length-Object.keys(c.reservations||{}).length),
+        remaining:Math.max(0,c.totalTickets-c.sold.length),received,
+        remainingValue:Math.max(0,c.totalTickets-c.sold.length)*c.price}
+    };
+  }));
 });
 app.get('/api/admin/payments',requireAdmin,(req,res)=>{ const db=load(); res.json([...(db.payments||[])].reverse()); });
 app.get('/api/admin/results',requireAdmin,(req,res)=>{
