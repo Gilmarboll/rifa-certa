@@ -136,6 +136,8 @@ async function carregarComprovante(){
     const widths={grupo:2,dezena:2,centena:3,milhar:4};
     const mod={dezena:100,centena:1000,milhar:10000}[type];
     const numbers=(d.numbers||[]).map(n=>String(mod?Number(n)%mod:n).padStart(widths[type]||0,'0')).join(', ');
+    const quantity=(d.numbers||[]).length;
+    const typePlural={grupo:'grupos',dezena:'dezenas',centena:'centenas',milhar:'milhares',numeros:'números'}[type]||'números';
     const status=d.fulfillmentStatus==='review_required'?'Pagamento recebido — aguarde conferência do responsável':
       paid?(demo?'SIMULAÇÃO — SEM PAGAMENTO REAL':'PAGO / VENDIDO'):
       terminal?'PEDIDO ENCERRADO — BILHETE NÃO VÁLIDO':'AGUARDANDO PAGAMENTO';
@@ -148,6 +150,7 @@ async function carregarComprovante(){
       <div class="linha"><strong>Sorteio:</strong> ${esc(dateText)} às ${esc(d.campaign?.time||'Não informado')}</div>
       <div class="linha"><strong>Cliente:</strong> ${esc(d.name||'-')}</div>
       <div class="linha"><strong>WhatsApp:</strong> ${esc(d.phone||'-')}</div>
+      <div class="linha"><strong>Quantidade:</strong> ${quantity} ${esc(quantity===1?(type==='numeros'?'número':type):typePlural)}</div>
       <div class="linha"><strong>${paid?'Números comprados':'Números do pedido'}:</strong><div class="numeros">${esc(numbers)}</div></div>
       <div class="linha"><strong>Valor:</strong> R$ ${Number(d.amount||0).toFixed(2).replace('.',',')}</div>
       <button onclick="compartilharComprovante()">Compartilhar comprovante</button>
