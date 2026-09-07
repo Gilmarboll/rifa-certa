@@ -303,8 +303,8 @@ hr{border:0;border-top:1px dashed
 <b>Rifa:</b> ${rifa}<br>
 <b>Cliente:</b> ${body.name}<br>
 <b>WhatsApp:</b> ${body.phone}<br>
-<b>Data:</b> ${dataExibida}<br>
-<b>Horário:</b> ${d.time}<br>
+<b>Data:</b> ${dataExibida||'Não informada'}<br>
+<b>Horário:</b> ${d.time||'Não informado'}<br>
 <b>${rotulo}${(d.numbers||[]).length>1?'s':''}:</b> ${numerosExibidos}<br>
 <b>Quantidade:</b> ${(d.numbers||[]).length}<br>
 <b>Total:</b> ${money(d.amount||0)}<br>
