@@ -13,7 +13,22 @@
 <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="createTab">Criar campanha</button>
 <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="manualTab">Registrar venda</button>
 <button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="resultsTab">Resultados e pagamentos</button>
+<button class="admin-tab" type="button" role="tab" aria-selected="false" data-tab="boloesTab">Bolões</button>
 </nav>
+<section id="boloesTab" class="admin-section" role="tabpanel" hidden>
+<div class="section-title"><div><h2>Bolões</h2><p>Crie e acompanhe os bolões de grupos.</p></div></div>
+<form id="bolaoForm" class="admin-form">
+<label>Nome do bolão<input name="title" placeholder="Ex: Bolão de Grupos" required></label>
+<label>Valor do bilhete<input name="price" type="number" min="0.01" step="0.01" required></label>
+<label>Data do concurso<input name="date" type="date" required></label>
+<label>Fechar apostas às<input name="closeTime" type="time" required></label>
+<label class="wide-field">Horários dos resultados<input name="drawTimes" placeholder="Ex: 11:20, 14:20, 16:20, 18:20, 21:30"></label>
+<label class="wide-field">Prêmios<input name="prize" placeholder="As faixas de prêmio serão configuradas depois"></label>
+<button class="primary wide-field" type="submit">Criar bolão</button>
+</form><div id="bolaoMsg" class="msg"></div>
+<div class="section-title bolao-list-title"><div><h2>Bolões criados</h2></div></div>
+<div id="bolaoList" class="campaign-list"></div>
+</section>
 <section id="campaignsTab" class="admin-section active" role="tabpanel">
 <div class="section-title"><div><h2>Campanhas</h2><p>Abra, compartilhe, pause ou encerre uma campanha.</p></div><span id="campaignCount" class="count-pill">0</span></div>
 <div id="campaigns" class="campaign-list"></div>
@@ -166,6 +181,8 @@ salesControl.innerHTML=cs.length?cs.map(c=>{
   return `<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${money(c.price)} cada</p></div></div><div class="campaign-stats"><div class="stat-box"><small>Vendidos</small><strong>${s.sold}</strong></div><div class="stat-box"><small>Reservados</small><strong>${s.reserved}</strong></div><div class="stat-box"><small>Disponíveis</small><strong>${s.available}</strong></div><div class="stat-box"><small>Total recebido</small><strong>${money(s.received)}</strong></div><div class="stat-box"><small>Valor reservado</small><strong>${money(s.reservedValue||0)}</strong></div><div class="stat-box"><small>Falta vender</small><strong>${s.remaining}</strong></div><div class="stat-box"><small>Valor disponível</small><strong>${money(s.remainingValue)}</strong></div></div>${reservations||'<p class="no-reservations">Nenhuma reserva aguardando pagamento.</p>'}</article>`;
 }).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
 const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
+const bs=await fetch('/api/admin/boloes',{headers:auth()}).then(r=>r.json());
+bolaoList.innerHTML=bs.length?bs.map(b=>`<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${b.status==='ativo'?'ativa':b.status==='pausado'?'pausada':'encerrada'}">${esc(b.status)}</span><h3>${esc(b.title)}</h3><p>10 grupos • ${money(b.price)} • fecha ${esc(b.date.split('-').reverse().join('/'))} às ${esc(b.closeTime)}</p></div></div><div class="campaign-actions"><button class="secondary" onclick="abrirBolao('${b.id}')">Abrir</button><button class="secondary" onclick="copiarBolao('${b.id}')">Copiar link</button><button class="secondary" onclick="statusBolao('${b.id}','${b.status==='ativo'?'pausado':'ativo'}')">${b.status==='ativo'?'Pausar':'Ativar'}</button><button class="secondary danger" onclick="statusBolao('${b.id}','encerrado')">Encerrar</button></div></article>`).join(''):'<p class="empty-state">Nenhum bolão criado.</p>';
 
 
 
@@ -218,6 +235,23 @@ async function marcarPremio(id,paid){
   const r=await fetch('/api/admin/winner/'+encodeURIComponent(id)+'/paid',{method:'PATCH',headers:auth(),body:JSON.stringify({paid})});
   if(r.ok) refresh(); else alert('Não foi possível atualizar o prêmio.');
 }
+function abrirBolao(id){window.open('/bolao.html?id='+encodeURIComponent(id),'_blank');}
+async function copiarBolao(id){
+  const link=location.origin+'/bolao.html?id='+encodeURIComponent(id);
+  await navigator.clipboard.writeText(link);alert('Link do bolão copiado!');
+}
+async function statusBolao(id,status){
+  const r=await fetch('/api/admin/bolao/'+id+'/status',{method:'PATCH',headers:auth(),body:JSON.stringify({status})});
+  if(r.ok) refresh();
+}
+bolaoForm.onsubmit=async e=>{
+  e.preventDefault();
+  const body=Object.fromEntries(new FormData(bolaoForm));
+  const r=await fetch('/api/admin/boloes',{method:'POST',headers:auth(),body:JSON.stringify(body)});
+  const d=await r.json();
+  bolaoMsg.textContent=r.ok?'Bolão criado com sucesso!':d.error;
+  if(r.ok){bolaoForm.reset();refresh();}
+};
 form.onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(form));delete o.image; if(image.files[0]){const fd=new FormData();fd.append('image',image.files[0]);const ur=await fetch('/api/admin/upload',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});const ud=await ur.json();if(!ur.ok){msg.textContent=ud.error||'Erro no upload';return;}o.imageUrl=ud.url;}const r=await fetch('/api/admin/campaigns',{method:'POST',headers:auth(),body:JSON.stringify(o)});const d=await r.json();msg.textContent=r.ok?'Campanha criada com sucesso!':d.error;if(r.ok){form.reset();refresh();}};
 saveResults.onclick=async()=>{
   const body={
