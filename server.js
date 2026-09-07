@@ -37,7 +37,7 @@ function initial(){
     sold:[13,17,33,64],
     reservations:{},
     createdAt:new Date().toISOString()
-  }], payments:[]};
+  }], payments:[], boloes:[], bolaoTickets:[]};
 }
 let state = initial();
 function load(){ return state; }
@@ -150,6 +150,35 @@ app.post('/api/admin/logout',requireAdmin,(req,res)=>{
 });
 app.get('/api/admin/me',requireAdmin,(req,res)=>res.json({user:ADMIN_USER}));
 
+app.get('/api/admin/boloes',requireAdmin,(req,res)=>{
+  res.json([...(load().boloes||[])].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))));
+});
+app.post('/api/admin/boloes',requireAdmin,asyncRoute(async(req,res)=>{
+  const {title,price,date,closeTime,drawTimes='',prize=''}=req.body||{};
+  if(!title||!Number(price)||!date||!closeTime)
+    return res.status(400).json({error:'Preencha nome, valor, data e fechamento.'});
+  const times=String(drawTimes).split(/[\s,;]+/).filter(Boolean);
+  const closesAt=new Date(`${date}T${closeTime}:00-03:00`).toISOString();
+  const db=load();
+  db.boloes=db.boloes||[];
+  const bolao={id:crypto.randomUUID(),title:String(title).trim(),price:Number(price),date,
+    closeTime,closesAt,drawTimes:times,prize:String(prize).trim(),groupsPerTicket:10,
+    status:'ativo',createdAt:new Date().toISOString()};
+  db.boloes.push(bolao);
+  await save(db);
+  res.json(bolao);
+}));
+app.patch('/api/admin/bolao/:id/status',requireAdmin,asyncRoute(async(req,res)=>{
+  const db=load();
+  const bolao=(db.boloes||[]).find(b=>b.id===req.params.id);
+  if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
+  if(!['ativo','pausado','encerrado'].includes(req.body.status))
+    return res.status(400).json({error:'Status inválido.'});
+  bolao.status=req.body.status;
+  await save(db);
+  res.json({ok:true,status:bolao.status});
+}));
+
 app.get('/api/campaigns',(req,res)=>{
   const db=load();
   db.campaigns.forEach(clean);
@@ -157,6 +186,18 @@ app.get('/api/campaigns',(req,res)=>{
   res.json(db.campaigns.filter(c=>c.status==='ativa').map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
 });
 app.get('/api/public-config',(req,res)=>res.json({supportWhatsApp:SUPPORT_WHATSAPP}));
+app.get('/api/boloes',(req,res)=>{
+  const now=Date.now();
+  const boloes=(load().boloes||[]).filter(b=>b.status==='ativo').map(b=>({
+    ...b,closed:Boolean(b.closesAt && Date.parse(b.closesAt)<=now)
+  }));
+  res.json(boloes);
+});
+app.get('/api/bolao/:id',(req,res)=>{
+  const b=(load().boloes||[]).find(x=>x.id===req.params.id && x.status==='ativo');
+  if(!b) return res.status(404).json({error:'Bolão não encontrado.'});
+  res.json({...b,closed:Boolean(b.closesAt && Date.parse(b.closesAt)<=Date.now())});
+});
 app.get('/api/campaign/:id',(req,res)=>{
   const db=load();
   const c=db.campaigns.find(x=>x.id===req.params.id);
@@ -617,6 +658,8 @@ async function initDatabase(){
   if(result.rows.length){
     state = result.rows[0].data;
     state.payments=state.payments||[];
+    state.boloes=state.boloes||[];
+    state.bolaoTickets=state.bolaoTickets||[];
     for(const p of state.payments){
       const c=state.campaigns.find(c=>c.id===p.campaignId);
       p.expiresAt=p.expiresAt||c?.reservations?.[p.numbers?.[0]]?.expiresAt||Date.parse(p.createdAt)+15*60*1000;
