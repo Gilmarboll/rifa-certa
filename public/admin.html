@@ -72,7 +72,7 @@
 <label>Rifa<select id="manualCampaign" required></select></label>
 <label>Nome do cliente<input id="manualName" required></label>
 <label>WhatsApp<input id="manualPhone" type="tel"></label>
-<label>Número / Grupo / Dezena / Centena<input id="manualNumber" required></label>
+<label>Números / Grupos / Dezenas / Centenas<input id="manualNumber" placeholder="Ex: 014, 125, 337" required><small>Separe os números por vírgula ou espaço.</small></label>
 <label>Forma de pagamento<select id="manualPayment"><option value="dinheiro">Dinheiro</option><option value="pix">PIX</option></select></label>
 <button class="primary wide-field" type="submit">Marcar PAGO / VENDIDO</button>
 </form><div id="manualMsg" class="msg"></div>
@@ -160,9 +160,10 @@ campaigns.innerHTML=cs.length?cs.map(c=>{
 }).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
 salesControl.innerHTML=cs.length?cs.map(c=>{
   const sold=c.sold||[], reserved=c.reservations||[];
-  const s=c.stats||{sold:sold.length,reserved:reserved.length,available:c.totalTickets-sold.length-reserved.length,remaining:c.totalTickets-sold.length,received:sold.length*c.price,remainingValue:(c.totalTickets-sold.length)*c.price};
+  const available=Math.max(0,c.totalTickets-sold.length-reserved.length);
+  const s=c.stats||{sold:sold.length,reserved:reserved.length,available,remaining:available,received:sold.length*c.price,reservedValue:reserved.length*c.price,remainingValue:available*c.price};
   const reservations=(c.reservationDetails||[]).map(r=>`<div class="reservation-box"><b>RESERVADO — ${reservationTime(r.expiresAt)}</b><p>Números: ${esc((r.numbers||[]).sort((a,b)=>a-b).map(n=>formatNumber(n,c.type)).join(', '))}<br>Cliente: ${esc(r.name||'ainda preenchendo')}<br>WhatsApp: ${esc(r.phone||'-')}<br>Valor: ${money(r.amount||0)}</p></div>`).join('');
-  return `<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${money(c.price)} cada</p></div></div><div class="campaign-stats"><div class="stat-box"><small>Vendidos</small><strong>${s.sold}</strong></div><div class="stat-box"><small>Reservados</small><strong>${s.reserved}</strong></div><div class="stat-box"><small>Disponíveis</small><strong>${s.available}</strong></div><div class="stat-box"><small>Total recebido</small><strong>${money(s.received)}</strong></div><div class="stat-box"><small>Falta vender</small><strong>${s.remaining}</strong></div><div class="stat-box"><small>Valor restante</small><strong>${money(s.remainingValue)}</strong></div></div>${reservations||'<p class="no-reservations">Nenhuma reserva aguardando pagamento.</p>'}</article>`;
+  return `<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${esc(c.status)}">${esc(c.status)}</span><h3>${esc(c.title)}</h3><p>${esc(c.type)} • ${money(c.price)} cada</p></div></div><div class="campaign-stats"><div class="stat-box"><small>Vendidos</small><strong>${s.sold}</strong></div><div class="stat-box"><small>Reservados</small><strong>${s.reserved}</strong></div><div class="stat-box"><small>Disponíveis</small><strong>${s.available}</strong></div><div class="stat-box"><small>Total recebido</small><strong>${money(s.received)}</strong></div><div class="stat-box"><small>Valor reservado</small><strong>${money(s.reservedValue||0)}</strong></div><div class="stat-box"><small>Falta vender</small><strong>${s.remaining}</strong></div><div class="stat-box"><small>Valor disponível</small><strong>${money(s.remainingValue)}</strong></div></div>${reservations||'<p class="no-reservations">Nenhuma reserva aguardando pagamento.</p>'}</article>`;
 }).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
 const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 
@@ -267,7 +268,7 @@ manualSaleForm.onsubmit=async e=>{
     campaignId:manualCampaign.value,
     name:manualName.value.trim(),
     phone:manualPhone.value.trim(),
-    number:manualNumber.value,
+    numbers:manualNumber.value,
     paymentMethod:manualPayment.value
   };
 
@@ -286,7 +287,7 @@ const rifa=manualCampaign.options[manualCampaign.selectedIndex].text;
 const tipo=d.type||'numeros';
 const rotulo=tipo==='centena'?'Centena':tipo==='dezena'?'Dezena':tipo==='grupo'?'Grupo':'Número';
 const casas=tipo==='centena'?3:(tipo==='dezena'||tipo==='grupo'?2:0);
-const numeroExibido=formatNumber(d.number,tipo);
+const numerosExibidos=(d.numbers||[]).map(n=>formatNumber(n,tipo)).join(', ');
 const dataExibida=d.date?d.date.split('-').reverse().join('/'):'';
 const bilhete=window.open('','_blank','width=400,height=600');
 bilhete.document.write(`
@@ -304,7 +305,9 @@ hr{border:0;border-top:1px dashed
 <b>WhatsApp:</b> ${body.phone}<br>
 <b>Data:</b> ${dataExibida}<br>
 <b>Horário:</b> ${d.time}<br>
-<b>${rotulo}:</b> ${numeroExibido}<br>
+<b>${rotulo}${(d.numbers||[]).length>1?'s':''}:</b> ${numerosExibidos}<br>
+<b>Quantidade:</b> ${(d.numbers||[]).length}<br>
+<b>Total:</b> ${money(d.amount||0)}<br>
 <b>Pagamento:</b> ${body.paymentMethod}<br>
 <b>Status:</b> PAGO / VENDIDO
 <hr>
