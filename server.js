@@ -310,7 +310,7 @@ app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
 });
 app.post('/api/admin/campaigns',requireAdmin,(req,res)=>{
  const {title,prize,type='numeros',price,totalTickets,imageUrl='',date,time,maxPrizePosition='1',prize1='0',prize2='0',prize3='0',prize4='0',prize5='0'}=req.body;
-  if(!title||!prize||!Number(price)||!Number(totalTickets))
+  if(!title||!prize||!date||!time||!Number(price)||!Number(totalTickets))
     return res.status(400).json({error:'Preencha os campos obrigatórios.'});
   const db=load();
   const c={
