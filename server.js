@@ -282,7 +282,14 @@ app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
     return res.status(400).json({error:'Existe um número inválido na lista.'});
   clean(c);
   const unavailable=nums.filter(n=>c.sold.includes(n)||c.reservations[n]);
-  if(unavailable.length) return res.status(409).json({error:'Número já vendido ou reservado: '+unavailable.join(', ')});
+  if(unavailable.length){
+    const width={grupo:2,dezena:2,centena:3,milhar:4}[c.type]||0;
+    const formatted=unavailable.map(n=>{
+      const zero={dezena:100,centena:1000,milhar:10000}[c.type];
+      return String(zero && n===zero ? 0 : n).padStart(width,'0');
+    });
+    return res.status(409).json({error:'Número já vendido ou reservado: '+formatted.join(', ')});
+  }
 
   c.sold.push(...nums);
   db.payments=db.payments||[];
