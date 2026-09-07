@@ -1,0 +1,8 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bolões - Rifa Certa</title><link rel="stylesheet" href="/style.css"></head><body>
+<header><div class="brand">🍀 <strong>Rifa Certa</strong></div><span class="safe">🔒 Ambiente seguro</span></header>
+<main><section class="admin-heading"><span class="badge">BOLÕES</span><h1>Escolha seu bolão</h1><p>Este é o link permanente dos bolões disponíveis.</p></section><section class="panel"><div id="list" class="campaign-list"><p>Carregando...</p></div></section></main>
+<script>
+const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+fetch('/api/boloes').then(r=>r.json()).then(items=>{list.innerHTML=items.length?items.map(b=>`<a class="campaign-card bolao-card-link" href="/bolao.html?id=${encodeURIComponent(b.id)}"><span class="status-badge status-${b.closed?'encerrada':'ativa'}">${b.closed?'FECHADO':'ABERTO'}</span><h2>${esc(b.title)}</h2><p>10 grupos por bilhete</p><p><strong>${money(b.price)}</strong></p><p>Fecha ${esc(b.date.split('-').reverse().join('/'))} às ${esc(b.closeTime)}</p></a>`).join(''):'<p class="empty-state">Nenhum bolão disponível no momento.</p>';}).catch(()=>list.innerHTML='<p>Não foi possível carregar agora.</p>');
+</script></body></html>
