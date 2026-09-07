@@ -227,13 +227,16 @@ app.get('/api/admin/campaigns',requireAdmin,(req,res)=>{
     const received=(db.payments||[])
       .filter(p=>p.campaignId===c.id && p.status==='processed' && p.fulfillmentStatus!=='review_required')
       .reduce((total,p)=>total+Number(p.amount||0),0);
+    const reservedCount=Object.keys(c.reservations||{}).length;
+    const available=Math.max(0,c.totalTickets-c.sold.length-reservedCount);
     return {...c,
       reservations:Object.keys(c.reservations||{}).map(Number),
       reservationDetails,
-      stats:{sold:c.sold.length,reserved:Object.keys(c.reservations||{}).length,
-        available:Math.max(0,c.totalTickets-c.sold.length-Object.keys(c.reservations||{}).length),
-        remaining:Math.max(0,c.totalTickets-c.sold.length),received,
-        remainingValue:Math.max(0,c.totalTickets-c.sold.length)*c.price}
+      stats:{sold:c.sold.length,reserved:reservedCount,
+        available,
+        remaining:available,received,
+        reservedValue:reservedCount*c.price,
+        remainingValue:available*c.price}
     };
   }));
 });
@@ -263,33 +266,40 @@ app.patch('/api/admin/winner/:id/paid',requireAdmin,asyncRoute(async(req,res)=>{
   res.status(404).json({error:'Ganhador não encontrado.'});
 }));
 app.post('/api/admin/manual-sale',requireAdmin,(req,res)=>{
-  const {campaignId,name,phone,number,paymentMethod}=req.body;
-  let n=Number(number);
+  const {campaignId,name,phone,number,numbers,paymentMethod}=req.body;
   const db=load();
   const c=db.campaigns.find(x=>x.id===campaignId);
 
   if(!c) return res.status(404).json({error:'Rifa não encontrada.'});
-  if(n===0 && ['dezena','centena','milhar'].includes(c.type)) n={dezena:100,centena:1000,milhar:10000}[c.type];
-  if(!Number.isInteger(n) || n<1 || n>c.totalTickets) return res.status(400).json({error:'Número inválido.'});
+  const raw=Array.isArray(numbers)?numbers:String(numbers??number??'').split(/[\s,;]+/);
+  const zeroValue={dezena:100,centena:1000,milhar:10000}[c.type];
+  const nums=[...new Set(raw.filter(v=>String(v).trim()!=='').map(value=>{
+    const parsed=Number(String(value).replace(/\D/g,''));
+    return parsed===0 && zeroValue ? zeroValue : parsed;
+  }))];
+  if(!nums.length) return res.status(400).json({error:'Informe pelo menos um número.'});
+  if(nums.some(n=>!Number.isInteger(n)||n<1||n>c.totalTickets))
+    return res.status(400).json({error:'Existe um número inválido na lista.'});
   clean(c);
-  if(c.sold.includes(n)||c.reservations[n]) return res.status(409).json({error:'Já vendido ou reservado.'});
+  const unavailable=nums.filter(n=>c.sold.includes(n)||c.reservations[n]);
+  if(unavailable.length) return res.status(409).json({error:'Número já vendido ou reservado: '+unavailable.join(', ')});
 
-  c.sold.push(n);
+  c.sold.push(...nums);
   db.payments=db.payments||[];
   db.payments.push({
     id:crypto.randomUUID(),
     campaignId,
-    numbers:[n],
+    numbers:nums,
     name:name||'',
     phone:phone||'',
-    amount:c.price,
+    amount:c.price*nums.length,
     status:'processed',
     paymentMethod:paymentMethod||'dinheiro',
     createdAt:new Date().toISOString()
   });
 
   save(db);
-  res.json({ok:true,type:c.type,date:c.date,time:c.time,number:n});
+  res.json({ok:true,type:c.type,date:c.date,time:c.time,numbers:nums,amount:c.price*nums.length});
 });
 app.post('/api/admin/campaigns',requireAdmin,(req,res)=>{
  const {title,prize,type='numeros',price,totalTickets,imageUrl='',date,time,maxPrizePosition='1',prize1='0',prize2='0',prize3='0',prize4='0',prize5='0'}=req.body;
@@ -536,7 +546,6 @@ app.post('/api/payments/pix',asyncRoute(async(req,res)=>{
       }
       db.payments.push(p);
     }
-    // Persist the stable idempotency key and exact body BEFORE contacting the provider.
     await save(db);
     if(p.provider==='demo') return paymentView(p);
     try{
@@ -548,7 +557,6 @@ app.post('/api/payments/pix',asyncRoute(async(req,res)=>{
       await save(db);
       return paymentView(p);
     }catch(err){
-      // Keep the same request for a safe retry after a timeout or lost response.
       if(err.status>=400 && err.status<500 && ![408,409,429].includes(err.status)) p.status='failed';
       p.lastErrorAt=new Date().toISOString();
       await save(db);
@@ -568,7 +576,6 @@ app.post('/api/webhooks/mercadopago',asyncRoute(async(req,res)=>{
   const orderId=String(req.query['data.id']||req.body?.data?.[0]?.id||req.body?.data?.id||'');
   if(!orderId) return res.sendStatus(200);
   const p=state.payments.find(p=>String(p.providerOrderId)===orderId);
-  // Creation may still be in flight; ask the provider to deliver again.
   if(!p) return res.sendStatus(503);
   await syncPayment(p);
   res.sendStatus(200);
@@ -599,28 +606,28 @@ async function initDatabase(){
       data JSONB NOT NULL
     )
   `);
-const result = await pool.query('SELECT data FROM app_state WHERE id=1');
-if(result.rows.length){
-  state = result.rows[0].data;
-  state.payments=state.payments||[];
-  for(const p of state.payments){
-    const c=state.campaigns.find(c=>c.id===p.campaignId);
-    p.expiresAt=p.expiresAt||c?.reservations?.[p.numbers?.[0]]?.expiresAt||Date.parse(p.createdAt)+15*60*1000;
-    if(p.status==='processed' && !p.fulfillmentStatus && p.numbers?.length && p.numbers.every(n=>c?.sold.includes(n))){
-      p.fulfilledAt=p.paidAt||p.createdAt;p.fulfillmentStatus='sold';
+  const result = await pool.query('SELECT data FROM app_state WHERE id=1');
+  if(result.rows.length){
+    state = result.rows[0].data;
+    state.payments=state.payments||[];
+    for(const p of state.payments){
+      const c=state.campaigns.find(c=>c.id===p.campaignId);
+      p.expiresAt=p.expiresAt||c?.reservations?.[p.numbers?.[0]]?.expiresAt||Date.parse(p.createdAt)+15*60*1000;
+      if(p.status==='processed' && !p.fulfillmentStatus && p.numbers?.length && p.numbers.every(n=>c?.sold.includes(n))){
+        p.fulfilledAt=p.paidAt||p.createdAt;p.fulfillmentStatus='sold';
+      }
     }
-  }
-  state.results=state.results||[];
-  for(const result of state.results){
-    for(const winner of result.winners||[]){
-      winner.id=winner.id||crypto.randomUUID();
-      winner.prizePaid=Boolean(winner.prizePaid);
+    state.results=state.results||[];
+    for(const result of state.results){
+      for(const winner of result.winners||[]){
+        winner.id=winner.id||crypto.randomUUID();
+        winner.prizePaid=Boolean(winner.prizePaid);
+      }
     }
+    await save(state);
+  }else{
+    await pool.query('INSERT INTO app_state (id,data) VALUES (1,$1)', [state]);
   }
-  await save(state);
-}else{
-  await pool.query('INSERT INTO app_state (id,data) VALUES (1,$1)', [state]);
-}
 }
 async function reconcilePayments(){
   for(const p of state.payments||[]){
