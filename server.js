@@ -588,6 +588,35 @@ function applyOrder(p,order){
     }
   }
 }
+function applyPayment(p,payment){
+  if(String(payment.id)!==String(p.providerOrderId) || payment.external_reference!==p.reservationId ||
+    Math.round(Number(payment.transaction_amount)*100)!==Math.round(p.amount*100)){
+    throw new Error('Os dados do pagamento não correspondem à reserva.');
+  }
+  const statusMap={approved:'processed',cancelled:'canceled',rejected:'failed'};
+  p.status=statusMap[payment.status]||payment.status;
+  p.statusDetail=payment.status==='approved'?'accredited':payment.status_detail;
+  p.updatedAt=new Date().toISOString();
+  const transaction=payment.point_of_interaction?.transaction_data||{};
+  p.qrCode=transaction.qr_code||p.qrCode||'';
+  p.qrCodeBase64=transaction.qr_code_base64||p.qrCodeBase64||'';
+  p.ticketUrl=transaction.ticket_url||p.ticketUrl||'';
+  const c=state.campaigns.find(c=>c.id===p.campaignId);
+  if(payment.status==='approved' && !p.fulfilledAt){
+    p.paidAt=p.paidAt||new Date().toISOString();
+    const conflict=!c || !p.numbers?.length || p.numbers.some(n=>
+      c.sold.includes(n) || (c.reservations[n] && c.reservations[n].reservationId!==p.reservationId));
+    if(conflict){ p.fulfillmentStatus='review_required'; return; }
+    p.numbers.forEach(n=>{ c.sold.push(n); delete c.reservations[n]; });
+    p.fulfilledAt=new Date().toISOString();
+    p.fulfillmentStatus='sold';
+  }
+  if(c && terminalStatuses.has(p.status) && !p.fulfilledAt){
+    for(const n of p.numbers||[]){
+      if(c.reservations[n]?.reservationId===p.reservationId) delete c.reservations[n];
+    }
+  }
+}
 const paymentJobs=new Map();
 async function withPaymentLock(id,fn){
   const previous=paymentJobs.get(id)||Promise.resolve();
@@ -597,6 +626,28 @@ async function withPaymentLock(id,fn){
 }
 async function syncPayment(p){
   return withPaymentLock(p.reservationId,async()=>{
+    if(p.providerApi==='payments'){
+      if(!p.providerOrderId){
+        if(!p.requestBody) return p;
+        const created=await mpRequest('https://api.mercadopago.com/v1/payments',{
+          method:'POST',headers:{'X-Idempotency-Key':p.reservationId},body:JSON.stringify(p.requestBody)
+        });
+        p.providerOrderId=created.id;
+        applyPayment(p,created);
+        await save(state);
+      }
+      const url='https://api.mercadopago.com/v1/payments/'+encodeURIComponent(p.providerOrderId);
+      let payment=await mpRequest(url);
+      if(!p.fulfilledAt && !terminalStatuses.has(p.status) && p.expiresAt<=Date.now() &&
+        ['pending','in_process','authorized'].includes(payment.status)){
+        try{
+          payment=await mpRequest(url,{method:'PUT',body:JSON.stringify({status:'cancelled'})});
+        }catch(err){ payment=await mpRequest(url); }
+      }
+      applyPayment(p,payment);
+      await save(state);
+      return p;
+    }
     if(!p.providerOrderId){
       if(!p.requestBody) return p;
       let recovered;
@@ -668,21 +719,20 @@ app.post('/api/payments/pix',asyncRoute(async(req,res)=>{
         const email=String(payer.email||process.env.MP_PAYER_EMAIL||'').trim();
         if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
           throw Object.assign(new Error('Não foi possível gerar o Pix. O responsável precisa configurar o e-mail de pagamento.'),{status:400});
-        p.requestBody={type:'online',external_reference:reservationId,processing_mode:'automatic',
-          total_amount:p.amount.toFixed(2),description:`Rifa Certa - ${campaign.title}`,
-          payer:{email,first_name:name},transactions:{payments:[{amount:p.amount.toFixed(2),
-            expiration_time:'PT30M',payment_method:{id:'pix',type:'bank_transfer'}}]}};
+        p.providerApi='payments';
+        p.requestBody={transaction_amount:p.amount,description:`Rifa Certa - ${campaign.title}`,
+          payment_method_id:'pix',external_reference:reservationId,payer:{email,first_name:name}};
       }
       db.payments.push(p);
     }
     await save(db);
     if(p.provider==='demo') return paymentView(p);
     try{
-      const order=await mpRequest('https://api.mercadopago.com/v1/orders',{
+      const order=await mpRequest('https://api.mercadopago.com/v1/payments',{
         method:'POST',headers:{'X-Idempotency-Key':reservationId},body:JSON.stringify(p.requestBody)
       });
       p.providerOrderId=order.id;
-      applyOrder(p,order);
+      applyPayment(p,order);
       await save(db);
       return paymentView(p);
     }catch(err){
