@@ -29,6 +29,17 @@ async function init(){
     for(let i=options.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[options[i],options[j]]=[options[j],options[i]];}
     picks=options.slice(0,10);renderPicks();
   };
+  $('continue').onclick=async()=>{
+    $('msg').textContent='Gerando bilhete de teste...';
+    const response=await fetch('/api/bolao/'+encodeURIComponent(bolao.id)+'/test-ticket',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        picks,name:$('customerName').value,phone:$('customerPhone').value,seller:$('seller').value
+      })
+    });
+    const data=await response.json();
+    if(!response.ok){$('msg').textContent=data.error||'Não foi possível gerar o bilhete.';return;}
+    location.href=data.ticketUrl;
+  };
   if(bolao.closed){$('msg').textContent='Este bolão já está fechado.';$('random').disabled=true;}
   renderPicks();
 }
