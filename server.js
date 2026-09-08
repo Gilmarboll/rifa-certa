@@ -76,6 +76,47 @@ function requireAdmin(req,res,next){
   if(t!==ADMIN_TOKEN) return res.status(401).json({error:'Faça login no painel.'});
   next();
 }
+function validBolaoPicks(values){
+  const picks=(Array.isArray(values)?values:[]).map(Number);
+  if(picks.length!==10 || picks.some(n=>!Number.isInteger(n)||n<1||n>25)) return null;
+  const counts={};
+  for(const n of picks){ counts[n]=(counts[n]||0)+1; if(counts[n]>2) return null; }
+  return picks;
+}
+function bolaoDraws(bolao){
+  const order=new Map((bolao.drawTimes||[]).map((time,index)=>[time,index]));
+  return [...(bolao.results||[])].sort((a,b)=>(order.get(a.time)??999)-(order.get(b.time)??999));
+}
+function scoreBolaoTicket(ticket,bolao){
+  const draws=bolaoDraws(bolao),first=draws.find(draw=>draw.time===(bolao.drawTimes||[])[0]);
+  const scoreFor=selectedDraws=>{
+    const available={};
+    selectedDraws.forEach(draw=>(draw.groups||[]).forEach(group=>{
+      available[group]=available[group]||[];available[group].push(draw.time);
+    }));
+    const hits=[];
+    ticket.picks.forEach((group,index)=>{
+      const times=available[group]||[];
+      if(times.length) hits.push({index,group,time:times.shift()});
+    });
+    return hits;
+  };
+  const hits=scoreFor(draws),firstHits=first?scoreFor([first]):[];
+  return {score:hits.length,firstScore:firstHits.length,hits,
+    kingWinner:Boolean(first && firstHits.length===5 && Number(first.groups?.[0])===Number(ticket.king))};
+}
+function bolaoDashboard(db,bolao){
+  const tickets=(db.bolaoTickets||[]).filter(t=>t.bolaoId===bolao.id).map(t=>({...t,...scoreBolaoTicket(t,bolao)}));
+  const revenue=tickets.length*Number(bolao.price||0),pct=bolao.percentages||{};
+  const pool=key=>Number((revenue*Number(pct[key]||0)/100).toFixed(2));
+  const maxFirst=tickets.length?Math.max(...tickets.map(t=>t.firstScore)):0;
+  const maxScore=tickets.length?Math.max(...tickets.map(t=>t.score)):0;
+  const complete=(bolao.drawTimes||[]).length>0 && bolaoDraws(bolao).length>=(bolao.drawTimes||[]).length;
+  return {bolao,tickets,revenue,complete,maxFirst,maxScore,
+    pools:{seller:pool('seller'),main:pool('main'),first:pool('first'),zero:pool('zero'),king:pool('king'),house:pool('house')},
+    winners:{first:maxFirst?tickets.filter(t=>t.firstScore===maxFirst):[],main:complete?tickets.filter(t=>t.score===maxScore):[],
+      zero:complete?tickets.filter(t=>t.score===0):[],king:tickets.filter(t=>t.kingWinner)}};
+}
 function findReservation(db,reservationId){
   for(const c of db.campaigns){
     clean(c);
@@ -154,7 +195,7 @@ app.get('/api/admin/boloes',requireAdmin,(req,res)=>{
   res.json([...(load().boloes||[])].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))));
 });
 app.post('/api/admin/boloes',requireAdmin,asyncRoute(async(req,res)=>{
-  const {title,price,date,closeTime,drawTimes='',prize=''}=req.body||{};
+  const {title,price,date,closeTime,drawTimes='',prize='',seller=10,main=35,first=15,zero=10,king=10,house=20}=req.body||{};
   if(!title||!Number(price)||!date||!closeTime)
     return res.status(400).json({error:'Preencha nome, valor, data e fechamento.'});
   const times=String(drawTimes).split(/[\s,;]+/).filter(Boolean);
@@ -163,10 +204,31 @@ app.post('/api/admin/boloes',requireAdmin,asyncRoute(async(req,res)=>{
   db.boloes=db.boloes||[];
   const bolao={id:crypto.randomUUID(),title:String(title).trim(),price:Number(price),date,
     closeTime,closesAt,drawTimes:times,prize:String(prize).trim(),groupsPerTicket:10,
-    status:'ativo',createdAt:new Date().toISOString()};
+    percentages:{seller:Number(seller),main:Number(main),first:Number(first),zero:Number(zero),king:Number(king),house:Number(house)},
+    results:[],status:'ativo',createdAt:new Date().toISOString()};
+  if(Object.values(bolao.percentages).some(n=>!Number.isFinite(n)||n<0) || Object.values(bolao.percentages).reduce((a,b)=>a+b,0)!==100)
+    return res.status(400).json({error:'As porcentagens precisam somar 100%.'});
   db.boloes.push(bolao);
   await save(db);
   res.json(bolao);
+}));
+app.get('/api/admin/bolao/:id/dashboard',requireAdmin,(req,res)=>{
+  const db=load(),bolao=(db.boloes||[]).find(b=>b.id===req.params.id);
+  if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
+  res.json(bolaoDashboard(db,bolao));
+});
+app.post('/api/admin/bolao/:id/results',requireAdmin,asyncRoute(async(req,res)=>{
+  const db=load(),bolao=(db.boloes||[]).find(b=>b.id===req.params.id);
+  if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
+  const time=String(req.body.time||''),groups=String(req.body.groups||'').split(/[\s,;]+/).filter(Boolean).map(Number);
+  if(!(bolao.drawTimes||[]).includes(time)) return res.status(400).json({error:'Escolha um horário deste bolão.'});
+  if(groups.length!==5||groups.some(n=>!Number.isInteger(n)||n<1||n>25))
+    return res.status(400).json({error:'Informe os 5 grupos, de 01 até 25.'});
+  bolao.results=bolao.results||[];
+  const existing=bolao.results.find(r=>r.time===time);
+  if(existing){existing.groups=groups;existing.updatedAt=new Date().toISOString();}
+  else bolao.results.push({time,groups,createdAt:new Date().toISOString()});
+  await save(db);res.json({ok:true,...bolaoDashboard(db,bolao)});
 }));
 app.patch('/api/admin/bolao/:id/status',requireAdmin,asyncRoute(async(req,res)=>{
   const db=load();
@@ -197,6 +259,25 @@ app.get('/api/bolao/:id',(req,res)=>{
   const b=(load().boloes||[]).find(x=>x.id===req.params.id && x.status==='ativo');
   if(!b) return res.status(404).json({error:'Bolão não encontrado.'});
   res.json({...b,closed:Boolean(b.closesAt && Date.parse(b.closesAt)<=Date.now())});
+});
+app.post('/api/bolao/:id/test-ticket',asyncRoute(async(req,res)=>{
+  const db=load(),bolao=(db.boloes||[]).find(b=>b.id===req.params.id && b.status==='ativo');
+  if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
+  if(Date.parse(bolao.closesAt)<=Date.now()) return res.status(409).json({error:'As apostas deste bolão já fecharam.'});
+  const picks=validBolaoPicks(req.body.picks),name=String(req.body.name||'').trim(),phone=String(req.body.phone||'').replace(/\D/g,''),seller=String(req.body.seller||'Gilmar').trim();
+  if(!picks) return res.status(400).json({error:'Escolha 10 bichos. Cada bicho pode aparecer no máximo 2 vezes.'});
+  if(!name||!/^\d{10,13}$/.test(phone)) return res.status(400).json({error:'Informe o nome e o WhatsApp com DDD.'});
+  const ticket={id:crypto.randomUUID(),bolaoId:bolao.id,picks,name,phone,seller:seller||'Gilmar',
+    king:picks[Math.floor(Math.random()*picks.length)],amount:Number(bolao.price),payment:'TESTE',createdAt:new Date().toISOString()};
+  db.bolaoTickets=db.bolaoTickets||[];db.bolaoTickets.push(ticket);await save(db);
+  res.json({ok:true,ticketUrl:'/bilhete-bolao.html?id='+ticket.id,ticket});
+}));
+app.get('/api/bolao-ticket/:id',(req,res)=>{
+  const db=load(),ticket=(db.bolaoTickets||[]).find(t=>t.id===req.params.id);
+  if(!ticket) return res.status(404).json({error:'Bilhete não encontrado.'});
+  const bolao=(db.boloes||[]).find(b=>b.id===ticket.bolaoId);
+  if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
+  res.json({ticket:{...ticket,...scoreBolaoTicket(ticket,bolao)},bolao,draws:bolaoDraws(bolao)});
 });
 app.get('/api/campaign/:id',(req,res)=>{
   const db=load();
@@ -660,6 +741,10 @@ async function initDatabase(){
     state.payments=state.payments||[];
     state.boloes=state.boloes||[];
     state.bolaoTickets=state.bolaoTickets||[];
+    for(const bolao of state.boloes){
+      bolao.results=bolao.results||[];
+      bolao.percentages=bolao.percentages||{seller:10,main:35,first:15,zero:10,king:10,house:20};
+    }
     for(const p of state.payments){
       const c=state.campaigns.find(c=>c.id===p.campaignId);
       p.expiresAt=p.expiresAt||c?.reservations?.[p.numbers?.[0]]?.expiresAt||Date.parse(p.createdAt)+15*60*1000;
