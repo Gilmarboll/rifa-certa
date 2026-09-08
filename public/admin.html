@@ -24,10 +24,19 @@
 <label>Fechar apostas às<input name="closeTime" type="time" required></label>
 <label class="wide-field">Horários dos resultados<input name="drawTimes" placeholder="Ex: 11:20, 14:20, 16:20, 18:20, 21:30"></label>
 <label class="wide-field">Prêmios<input name="prize" placeholder="As faixas de prêmio serão configuradas depois"></label>
+<div class="prize-fields wide-field">
+<label>Vendedor %<input name="seller" type="number" value="10" min="0"></label>
+<label>Mais pontos %<input name="main" type="number" value="35" min="0"></label>
+<label>1º sorteio %<input name="first" type="number" value="15" min="0"></label>
+<label>Zero ponto %<input name="zero" type="number" value="10" min="0"></label>
+<label>Rei da Selva %<input name="king" type="number" value="10" min="0"></label>
+<label>Administração %<input name="house" type="number" value="20" min="0"></label>
+</div>
 <button class="primary wide-field" type="submit">Criar bolão</button>
 </form><div id="bolaoMsg" class="msg"></div>
 <div class="section-title bolao-list-title"><div><h2>Bolões criados</h2></div></div>
 <div id="bolaoList" class="campaign-list"></div>
+<div id="bolaoManager" class="bolao-manager" hidden></div>
 </section>
 <section id="campaignsTab" class="admin-section active" role="tabpanel">
 <div class="section-title"><div><h2>Campanhas</h2><p>Abra, compartilhe, pause ou encerre uma campanha.</p></div><span id="campaignCount" class="count-pill">0</span></div>
@@ -182,7 +191,7 @@ salesControl.innerHTML=cs.length?cs.map(c=>{
 }).join(''):'<p class="empty-state">Nenhuma campanha criada.</p>';
 const ps=await fetch('/api/admin/payments',{headers:auth()}).then(r=>r.json());
 const bs=await fetch('/api/admin/boloes',{headers:auth()}).then(r=>r.json());
-bolaoList.innerHTML=bs.length?bs.map(b=>`<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${b.status==='ativo'?'ativa':b.status==='pausado'?'pausada':'encerrada'}">${esc(b.status)}</span><h3>${esc(b.title)}</h3><p>10 grupos • ${money(b.price)} • fecha ${esc(b.date.split('-').reverse().join('/'))} às ${esc(b.closeTime)}</p></div></div><div class="campaign-actions"><button class="secondary" onclick="abrirBolao('${b.id}')">Abrir</button><button class="secondary" onclick="copiarBolao('${b.id}')">Copiar link</button><button class="secondary" onclick="statusBolao('${b.id}','${b.status==='ativo'?'pausado':'ativo'}')">${b.status==='ativo'?'Pausar':'Ativar'}</button><button class="secondary danger" onclick="statusBolao('${b.id}','encerrado')">Encerrar</button></div></article>`).join(''):'<p class="empty-state">Nenhum bolão criado.</p>';
+bolaoList.innerHTML=bs.length?bs.map(b=>`<article class="campaign-card"><div class="campaign-main"><div><span class="status-badge status-${b.status==='ativo'?'ativa':b.status==='pausado'?'pausada':'encerrada'}">${esc(b.status)}</span><h3>${esc(b.title)}</h3><p>10 grupos • ${money(b.price)} • fecha ${esc(b.date.split('-').reverse().join('/'))} às ${esc(b.closeTime)}</p></div></div><div class="campaign-actions"><button class="secondary" onclick="abrirBolao('${b.id}')">Abrir</button><button class="primary" onclick="gerenciarBolao('${b.id}')">Apostas e resultados</button><button class="secondary" onclick="copiarBolao('${b.id}')">Copiar link</button><button class="secondary" onclick="statusBolao('${b.id}','${b.status==='ativo'?'pausado':'ativo'}')">${b.status==='ativo'?'Pausar':'Ativar'}</button><button class="secondary danger" onclick="statusBolao('${b.id}','encerrado')">Encerrar</button></div></article>`).join(''):'<p class="empty-state">Nenhum bolão criado.</p>';
 
 
 
@@ -243,6 +252,25 @@ async function copiarBolao(id){
 async function statusBolao(id,status){
   const r=await fetch('/api/admin/bolao/'+id+'/status',{method:'PATCH',headers:auth(),body:JSON.stringify({status})});
   if(r.ok) refresh();
+}
+async function gerenciarBolao(id){
+  const r=await fetch('/api/admin/bolao/'+encodeURIComponent(id)+'/dashboard',{headers:auth()}),d=await r.json();
+  if(!r.ok)return alert(d.error||'Não foi possível abrir.');
+  const b=d.bolao,p=d.pools,winNames=list=>(list||[]).map(t=>esc(t.name)+' ('+t.score+' pontos)').join(', ')||'Nenhum';
+  bolaoManager.hidden=false;
+  bolaoManager.innerHTML=`<div class="section-title"><div><h2>${esc(b.title)}</h2><p>MODO DE TESTE — ${d.tickets.length} bilhete(s), arrecadação fictícia ${money(d.revenue)}</p></div></div>
+  <div class="campaign-stats"><div class="stat-box"><small>Vendedores</small><strong>${money(p.seller)}</strong></div><div class="stat-box"><small>Mais pontos</small><strong>${money(p.main)}</strong></div><div class="stat-box"><small>1º sorteio</small><strong>${money(p.first)}</strong></div><div class="stat-box"><small>Zero ponto</small><strong>${money(p.zero)}</strong></div><div class="stat-box"><small>Rei da Selva</small><strong>${money(p.king)}</strong></div><div class="stat-box"><small>Administração</small><strong>${money(p.house)}</strong></div></div>
+  <form class="admin-form bolao-result-form" onsubmit="salvarResultadoBolao(event,'${b.id}')"><label>Horário<select name="time">${(b.drawTimes||[]).map(t=>`<option>${esc(t)}</option>`).join('')}</select></label><label>5 grupos sorteados<input name="groups" placeholder="Ex: 03, 21, 25, 04, 05" required></label><button class="primary wide-field">Salvar resultado de teste</button></form><div id="bolaoResultMsg" class="msg"></div>
+  <h3>Resultados lançados</h3>${(b.results||[]).length?(b.results||[]).map(x=>`<p><b>${esc(x.time)}:</b> ${x.groups.map(n=>String(n).padStart(2,'0')).join(', ')}</p>`).join(''):'<p>Nenhum resultado lançado.</p>'}
+  <h3>Classificação</h3><p><b>Líder do primeiro sorteio:</b> ${winNames(d.winners.first)}</p><p><b>Rei da Selva:</b> ${winNames(d.winners.king)}</p><p><b>Mais pontos do dia:</b> ${d.complete?winNames(d.winners.main):'Aguardando todos os sorteios'}</p><p><b>Zero ponto:</b> ${d.complete?winNames(d.winners.zero):'Aguardando todos os sorteios'}</p>
+  <h3>Bilhetes</h3>${d.tickets.length?d.tickets.map(t=>`<article class="admin-card"><b>${esc(t.name)}</b> — ${t.score} ponto(s)<br>Vendedor: ${esc(t.seller)} • Rei: ${String(t.king).padStart(2,'0')}<br>Jogo: ${t.picks.map(n=>String(n).padStart(2,'0')).join(', ')}<br><a class="receipt-link" target="_blank" href="/bilhete-bolao.html?id=${encodeURIComponent(t.id)}">Abrir bilhete</a></article>`).join(''):'<p>Nenhum bilhete comprado.</p>'}`;
+  bolaoManager.scrollIntoView({behavior:'smooth'});
+}
+async function salvarResultadoBolao(event,id){
+  event.preventDefault();const form=event.target,body=Object.fromEntries(new FormData(form));
+  const r=await fetch('/api/admin/bolao/'+encodeURIComponent(id)+'/results',{method:'POST',headers:auth(),body:JSON.stringify(body)}),d=await r.json();
+  if(!r.ok){bolaoResultMsg.textContent=d.error||'Erro ao salvar.';return;}
+  await gerenciarBolao(id);
 }
 bolaoForm.onsubmit=async e=>{
   e.preventDefault();
