@@ -248,6 +248,14 @@ app.get('/api/campaigns',(req,res)=>{
   res.json(db.campaigns.filter(c=>c.status==='ativa').map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
 });
 app.get('/api/public-config',(req,res)=>res.json({supportWhatsApp:SUPPORT_WHATSAPP}));
+app.get('/api/mercadopago-health',asyncRoute(async(req,res)=>{
+  try{
+    await mpRequest('https://api.mercadopago.com/v1/payment_methods',{method:'GET'});
+    res.json({ok:true,status:200});
+  }catch(err){
+    res.status(200).json({ok:false,status:Number(err.status)||500});
+  }
+}));
 app.get('/api/boloes',(req,res)=>{
   const now=Date.now();
   const boloes=(load().boloes||[]).filter(b=>b.status==='ativo').map(b=>({
