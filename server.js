@@ -106,13 +106,14 @@ function scoreBolaoTicket(ticket,bolao){
     kingWinner:Boolean(first && firstHits.length===5 && Number(first.groups?.[0])===Number(ticket.king))};
 }
 function bolaoDashboard(db,bolao){
-  const tickets=(db.bolaoTickets||[]).filter(t=>t.bolaoId===bolao.id).map(t=>({...t,...scoreBolaoTicket(t,bolao)}));
+  const tickets=(db.bolaoTickets||[]).filter(t=>t.bolaoId===bolao.id).map((t,index)=>({...t,ticketNumber:index+1,...scoreBolaoTicket(t,bolao)}));
   const revenue=tickets.length*Number(bolao.price||0),pct=bolao.percentages||{};
   const pool=key=>Number((revenue*Number(pct[key]||0)/100).toFixed(2));
   const maxFirst=tickets.length?Math.max(...tickets.map(t=>t.firstScore)):0;
   const maxScore=tickets.length?Math.max(...tickets.map(t=>t.score)):0;
   const complete=(bolao.drawTimes||[]).length>0 && bolaoDraws(bolao).length>=(bolao.drawTimes||[]).length;
-  return {bolao,tickets,revenue,complete,maxFirst,maxScore,
+  const currentZero=tickets.filter(t=>t.score===0);
+  return {bolao,tickets,revenue,complete,maxFirst,maxScore,currentZero,
     pools:{seller:pool('seller'),main:pool('main'),first:pool('first'),zero:pool('zero'),king:pool('king'),house:pool('house')},
     winners:{first:maxFirst?tickets.filter(t=>t.firstScore===maxFirst):[],main:complete?tickets.filter(t=>t.score===maxScore):[],
       zero:complete?tickets.filter(t=>t.score===0):[],king:tickets.filter(t=>t.kingWinner)}};
@@ -230,6 +231,14 @@ app.post('/api/admin/bolao/:id/results',requireAdmin,asyncRoute(async(req,res)=>
   else bolao.results.push({time,groups,createdAt:new Date().toISOString()});
   await save(db);res.json({ok:true,...bolaoDashboard(db,bolao)});
 }));
+app.delete('/api/admin/bolao/:id/results/:time',requireAdmin,asyncRoute(async(req,res)=>{
+  const db=load(),bolao=(db.boloes||[]).find(b=>b.id===req.params.id);
+  if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
+  const before=(bolao.results||[]).length;
+  bolao.results=(bolao.results||[]).filter(r=>r.time!==req.params.time);
+  if(bolao.results.length===before) return res.status(404).json({error:'Resultado não encontrado.'});
+  await save(db);res.json({ok:true,...bolaoDashboard(db,bolao)});
+}));
 app.patch('/api/admin/bolao/:id/status',requireAdmin,asyncRoute(async(req,res)=>{
   const db=load();
   const bolao=(db.boloes||[]).find(b=>b.id===req.params.id);
@@ -248,14 +257,6 @@ app.get('/api/campaigns',(req,res)=>{
   res.json(db.campaigns.filter(c=>c.status==='ativa').map(c=>({...c,reservations:Object.keys(c.reservations||{}).map(Number)})));
 });
 app.get('/api/public-config',(req,res)=>res.json({supportWhatsApp:SUPPORT_WHATSAPP}));
-app.get('/api/mercadopago-health',asyncRoute(async(req,res)=>{
-  try{
-    await mpRequest('https://api.mercadopago.com/v1/payment_methods',{method:'GET'});
-    res.json({ok:true,status:200});
-  }catch(err){
-    res.status(200).json({ok:false,status:Number(err.status)||500});
-  }
-}));
 app.get('/api/boloes',(req,res)=>{
   const now=Date.now();
   const boloes=(load().boloes||[]).filter(b=>b.status==='ativo').map(b=>({
@@ -279,6 +280,22 @@ app.post('/api/bolao/:id/test-ticket',asyncRoute(async(req,res)=>{
     king:picks[Math.floor(Math.random()*picks.length)],amount:Number(bolao.price),payment:'TESTE',createdAt:new Date().toISOString()};
   db.bolaoTickets=db.bolaoTickets||[];db.bolaoTickets.push(ticket);await save(db);
   res.json({ok:true,ticketUrl:'/bilhete-bolao.html?id='+ticket.id,ticket});
+}));
+app.post('/api/bolao/:id/test-tickets',asyncRoute(async(req,res)=>{
+  const db=load(),bolao=(db.boloes||[]).find(b=>b.id===req.params.id && b.status==='ativo');
+  if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
+  if(Date.parse(bolao.closesAt)<=Date.now()) return res.status(409).json({error:'As apostas deste bolão já fecharam.'});
+  const games=Array.isArray(req.body.games)?req.body.games:[];
+  if(!games.length||games.length>20) return res.status(400).json({error:'Adicione de 1 até 20 cartelas.'});
+  const validated=games.map(validBolaoPicks);
+  if(validated.some(p=>!p)) return res.status(400).json({error:'Existe uma cartela inválida. Escolha 10 bichos por cartela.'});
+  const name=String(req.body.name||'').trim(),phone=String(req.body.phone||'').replace(/\D/g,''),seller=String(req.body.seller||'Gilmar').trim();
+  if(!name||!/^\d{10,13}$/.test(phone)) return res.status(400).json({error:'Informe o nome e o WhatsApp com DDD.'});
+  const batchId=crypto.randomUUID();
+  const tickets=validated.map(picks=>({id:crypto.randomUUID(),batchId,bolaoId:bolao.id,picks,name,phone,seller:seller||'Gilmar',
+    king:picks[Math.floor(Math.random()*picks.length)],amount:Number(bolao.price),payment:'TESTE',createdAt:new Date().toISOString()}));
+  db.bolaoTickets=db.bolaoTickets||[];db.bolaoTickets.push(...tickets);await save(db);
+  res.json({ok:true,tickets,ticketUrls:tickets.map(t=>'/bilhete-bolao.html?id='+t.id)});
 }));
 app.get('/api/bolao-ticket/:id',(req,res)=>{
   const db=load(),ticket=(db.bolaoTickets||[]).find(t=>t.id===req.params.id);
