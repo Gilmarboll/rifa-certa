@@ -297,6 +297,20 @@ app.post('/api/bolao/:id/test-tickets',asyncRoute(async(req,res)=>{
   db.bolaoTickets=db.bolaoTickets||[];db.bolaoTickets.push(...tickets);await save(db);
   res.json({ok:true,tickets,ticketUrls:tickets.map(t=>'/bilhete-bolao.html?id='+t.id)});
 }));
+app.post('/api/bolao-ticket-shares',asyncRoute(async(req,res)=>{
+  const db=load(),ids=Array.isArray(req.body.ids)?[...new Set(req.body.ids.map(String))].slice(0,200):[];
+  const tickets=(db.bolaoTickets||[]).filter(t=>ids.includes(t.id));
+  if(!ids.length||tickets.length!==ids.length||new Set(tickets.map(t=>t.bolaoId)).size!==1)
+    return res.status(400).json({error:'Cartelas inválidas para compartilhamento.'});
+  const share={id:crypto.randomUUID(),ids,createdAt:new Date().toISOString()};
+  db.bolaoTicketShares=db.bolaoTicketShares||[];db.bolaoTicketShares.push(share);await save(db);
+  res.json({url:'/meus-bilhetes-bolao.html?share='+share.id});
+}));
+app.get('/api/bolao-ticket-shares/:id',(req,res)=>{
+  const share=(load().bolaoTicketShares||[]).find(s=>s.id===req.params.id);
+  if(!share) return res.status(404).json({error:'Link de cartelas não encontrado.'});
+  res.json({ids:share.ids});
+});
 app.get('/api/bolao-ticket/:id',(req,res)=>{
   const db=load(),ticket=(db.bolaoTickets||[]).find(t=>t.id===req.params.id);
   if(!ticket) return res.status(404).json({error:'Bilhete não encontrado.'});
