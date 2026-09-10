@@ -8,10 +8,10 @@ let ids=[],shareId='';
 function prizeCard(label,detail,value){
   return `<article class="customer-prize"><small>${esc(label)}</small><span>${esc(detail)}</span><strong>${money(value)}</strong></article>`;
 }
-function winnerRows(title,items,pool){
+function winnerRows(title,items,pool,scoreKey='score',showPrize=true){
   if(!items?.length)return '';
-  const each=pool/items.length;
-  return `<section class="customer-section"><h2>${esc(title)}</h2><div class="customer-table">${items.map(t=>`<article><div><b>${esc(t.name)}</b><small>Vendedor: ${esc(t.seller)}</small></div><strong>${t.score} acerto(s)</strong><span>${money(each)}</span><small>${t.picks.map(fmt).join(' - ')}</small></article>`).join('')}</div></section>`;
+  const each=Number(pool||0)/items.length;
+  return `<section class="customer-section"><h2>${esc(title)}</h2><div class="customer-table">${items.map(t=>`<article><div><b>${esc(t.name)}</b><small>Vendedor: ${esc(t.seller)}</small></div><strong>${t[scoreKey]||0} acerto(s)</strong><span>${showPrize?money(each):'Posição atual'}</span><small>${t.picks.map(fmt).join(' - ')}</small></article>`).join('')}</div></section>`;
 }
 function ticketCard(d,index){
   const {ticket:t}=d,hitByIndex=new Map((t.hits||[]).map(h=>[h.index,h]));
@@ -29,8 +29,8 @@ async function init(){
   $('customerPanel').innerHTML=`<div class="customer-hero"><span class="badge">${esc(bolao.status==='encerrado'?'ENCERRADO':'EM ANDAMENTO')}</span><h1>${esc(bolao.title)}</h1><p>${date(bolao.date)} • ${items.length} cartela(s) • ${money(items.reduce((s,d)=>s+Number(d.ticket.amount||0),0))}</p></div>
   <h2 class="center-title">🏆 Prêmios do bolão</h2><div class="customer-prizes">${prizeCard('Primeiro sorteio','Líder',p.first)}${prizeCard('Rei da Selva','Primeiro sorteio',p.king)}${prizeCard('Mais pontos','Último sorteio',p.main)}${prizeCard('Zero pontos','Último sorteio',p.zero)}</div>
   <section class="customer-section"><h2>Resultados</h2>${draws.length?`<div class="draw-table">${draws.map(d=>`<article><b>${esc(d.time)}</b><span>${d.groups.map(fmt).join(' - ')}</span></article>`).join('')}</div>`:'<p>Aguardando o primeiro resultado.</p>'}</section>
-  ${winnerRows('Líderes atuais',dash?.leaders?.slice(0,10),p.main)}
-  ${winnerRows('Ganhadores do primeiro sorteio',dash?.winners?.first,p.first)}
+  ${winnerRows('Líderes atuais',dash?.leaders?.slice(0,10),0,'score',false)}
+  ${winnerRows('Ganhadores do primeiro sorteio',dash?.winners?.first,p.first,'firstScore')}
   ${winnerRows('Rei da Selva',dash?.winners?.king,p.king)}
   <section class="customer-section"><h2>Meus jogos</h2><p><b>Total: ${items.length} cartela(s)</b></p>${items.map(ticketCard).join('')}</section>`;
   $('refresh').onclick=()=>location.reload();
