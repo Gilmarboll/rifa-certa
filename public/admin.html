@@ -249,6 +249,10 @@ async function copiarBolao(id){
   const link=location.origin+'/bolao.html?id='+encodeURIComponent(id);
   await navigator.clipboard.writeText(link);alert('Link do bolão copiado!');
 }
+async function copiarBilhetesCliente(ids){
+  const link=location.origin+'/meus-bilhetes-bolao.html?ids='+encodeURIComponent(ids);
+  await navigator.clipboard.writeText(link);alert('Link com todas as cartelas do cliente copiado!');
+}
 async function statusBolao(id,status){
   const r=await fetch('/api/admin/bolao/'+id+'/status',{method:'PATCH',headers:auth(),body:JSON.stringify({status})});
   if(r.ok) refresh();
@@ -258,6 +262,7 @@ async function gerenciarBolao(id){
   if(!r.ok)return alert(d.error||'Não foi possível abrir.');
   const b=d.bolao,p=d.pools,winNames=(list,field='score')=>(list||[]).map(t=>esc(t.name)+' — Cartela '+t.ticketNumber+' ('+t[field]+' pontos)').join(', ')||'Nenhum';
   const currentLeaders=(b.results||[]).length?(d.tickets||[]).filter(t=>t.score===d.maxScore):[];
+  const clients=Object.values((d.tickets||[]).reduce((all,t)=>{const key=t.phone||t.name;(all[key]||(all[key]={name:t.name,phone:t.phone,ids:[]})).ids.push(t.id);return all;},{}));
   bolaoManager.hidden=false;
   bolaoManager.innerHTML=`<div class="section-title"><div><h2>${esc(b.title)}</h2><p>MODO DE TESTE — ${d.tickets.length} bilhete(s), arrecadação fictícia ${money(d.revenue)}</p></div></div>
   <div class="campaign-stats"><div class="stat-box"><small>Vendedores</small><strong>${money(p.seller)}</strong></div><div class="stat-box"><small>Mais pontos</small><strong>${money(p.main)}</strong></div><div class="stat-box"><small>1º sorteio</small><strong>${money(p.first)}</strong></div><div class="stat-box"><small>Zero ponto</small><strong>${money(p.zero)}</strong></div><div class="stat-box"><small>Rei da Selva</small><strong>${money(p.king)}</strong></div><div class="stat-box"><small>Administração</small><strong>${money(p.house)}</strong></div></div>
@@ -265,6 +270,7 @@ async function gerenciarBolao(id){
   <h3>Resultados lançados</h3>${(b.results||[]).length?(b.results||[]).map(x=>`<div class="result-row"><p><b>${esc(x.time)}:</b> ${x.groups.map(n=>String(n).padStart(2,'0')).join(', ')}</p><button class="secondary danger" onclick="apagarResultadoBolao('${b.id}','${esc(x.time)}')">Apagar</button></div>`).join(''):'<p>Nenhum resultado lançado.</p>'}
   <h3>Classificação</h3><p><b>Ganhador(es) do primeiro sorteio:</b> ${winNames(d.winners.first,'firstScore')}</p><p><b>Rei da Selva:</b> ${(d.winners.king||[]).map(t=>esc(t.name)+' — Cartela '+t.ticketNumber+' — Rei '+String(t.king).padStart(2,'0')+' ('+t.firstScore+' pontos)').join(', ')||'Nenhum'}</p><p><b>Líder atual do bolão:</b> ${winNames(currentLeaders)}</p><p><b>Ganhador de mais pontos:</b> ${d.complete?winNames(d.winners.main):'Será confirmado no último sorteio'}</p>
   <details class="bolao-details"><summary>Ver cartelas com zero ponto (${(d.complete?d.winners.zero:d.currentZero).length})</summary><p>${d.complete?winNames(d.winners.zero):winNames(d.currentZero)}</p></details>
+  <details class="bolao-details"><summary>Enviar cartelas por cliente (${clients.length})</summary>${clients.length?clients.map(c=>`<div class="client-ticket-row"><span><b>${esc(c.name)}</b><small>${esc(c.phone||'Sem telefone')} • ${c.ids.length} cartela(s)</small></span><button class="secondary" onclick="copiarBilhetesCliente('${c.ids.join(',')}')">Copiar link completo</button></div>`).join(''):'<p>Nenhum cliente.</p>'}</details>
   <details class="bolao-details"><summary>Ver todos os bilhetes (${d.tickets.length})</summary>${d.tickets.length?d.tickets.map(t=>`<article class="admin-card"><b>${esc(t.name)}</b> — Cartela ${t.ticketNumber} — ${t.score} ponto(s)<br>Vendedor: ${esc(t.seller)} • Rei: ${String(t.king).padStart(2,'0')}<br>Jogo: ${t.picks.map(n=>String(n).padStart(2,'0')).join(', ')}<br><a class="receipt-link" target="_blank" href="/bilhete-bolao.html?id=${encodeURIComponent(t.id)}">Abrir bilhete</a></article>`).join(''):'<p>Nenhum bilhete comprado.</p>'}</details>`;
   bolaoManager.scrollIntoView({behavior:'smooth'});
 }
