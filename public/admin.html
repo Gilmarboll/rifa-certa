@@ -250,7 +250,9 @@ async function copiarBolao(id){
   await navigator.clipboard.writeText(link);alert('Link do bolão copiado!');
 }
 async function copiarBilhetesCliente(ids){
-  const link=location.origin+'/meus-bilhetes-bolao.html?ids='+encodeURIComponent(ids);
+  const r=await fetch('/api/bolao-ticket-shares',{method:'POST',headers:auth(),body:JSON.stringify({ids:ids.split(',')})}),d=await r.json();
+  if(!r.ok)return alert(d.error||'Não foi possível criar o link.');
+  const link=location.origin+d.url;
   await navigator.clipboard.writeText(link);alert('Link com todas as cartelas do cliente copiado!');
 }
 async function statusBolao(id,status){
