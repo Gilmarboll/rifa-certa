@@ -105,6 +105,21 @@ function scoreBolaoTicket(ticket,bolao){
   return {score:hits.length,firstScore:firstHits.length,hits,
     kingWinner:Boolean(first && firstHits.length===5 && Number(first.groups?.[0])===Number(ticket.king))};
 }
+function bolaoKingCarry(db,current){
+  const ordered=[...(db.boloes||[])].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
+  let carry=0;
+  for(const bolao of ordered){
+    if(bolao.id===current.id) break;
+    const draws=bolaoDraws(bolao);
+    const firstTime=(bolao.drawTimes||[])[0];
+    if(!firstTime||!draws.some(draw=>draw.time===firstTime)) continue;
+    const tickets=(db.bolaoTickets||[]).filter(t=>t.bolaoId===bolao.id);
+    const hasKing=tickets.some(t=>scoreBolaoTicket(t,bolao).kingWinner);
+    const base=tickets.length*Number(bolao.price||0)*Number(bolao.percentages?.king||0)/100;
+    carry=hasKing?0:Number((carry+base).toFixed(2));
+  }
+  return carry;
+}
 function bolaoDashboard(db,bolao){
   const tickets=(db.bolaoTickets||[]).filter(t=>t.bolaoId===bolao.id).map((t,index)=>({...t,ticketNumber:index+1,...scoreBolaoTicket(t,bolao)}));
   const revenue=tickets.length*Number(bolao.price||0),pct=bolao.percentages||{};
@@ -113,8 +128,9 @@ function bolaoDashboard(db,bolao){
   const maxScore=tickets.length?Math.max(...tickets.map(t=>t.score)):0;
   const complete=(bolao.drawTimes||[]).length>0 && bolaoDraws(bolao).length>=(bolao.drawTimes||[]).length;
   const currentZero=tickets.filter(t=>t.score===0);
-  return {bolao,tickets,revenue,complete,maxFirst,maxScore,currentZero,
-    pools:{seller:pool('seller'),main:pool('main'),first:pool('first'),zero:pool('zero'),king:pool('king'),house:pool('house')},
+  const kingCarry=bolaoKingCarry(db,bolao);
+  return {bolao,tickets,revenue,complete,maxFirst,maxScore,currentZero,kingCarry,
+    pools:{seller:pool('seller'),main:pool('main'),first:pool('first'),zero:pool('zero'),king:Number((pool('king')+kingCarry).toFixed(2)),house:pool('house')},
     winners:{first:maxFirst?tickets.filter(t=>t.firstScore===maxFirst):[],main:complete?tickets.filter(t=>t.score===maxScore):[],
       zero:complete?tickets.filter(t=>t.score===0):[],king:tickets.filter(t=>t.kingWinner)}};
 }
@@ -203,7 +219,8 @@ app.post('/api/admin/boloes',requireAdmin,asyncRoute(async(req,res)=>{
   const closesAt=new Date(`${date}T${closeTime}:00-03:00`).toISOString();
   const db=load();
   db.boloes=db.boloes||[];
-  const bolao={id:crypto.randomUUID(),title:String(title).trim(),price:Number(price),date,
+  const contestNumber=Math.max(0,...db.boloes.map(b=>Number(b.contestNumber||0)))+1;
+  const bolao={id:crypto.randomUUID(),contestNumber,title:String(title).trim(),price:Number(price),date,
     closeTime,closesAt,drawTimes:times,prize:String(prize).trim(),groupsPerTicket:10,
     percentages:{seller:Number(seller),main:Number(main),first:Number(first),zero:Number(zero),king:Number(king),house:Number(house)},
     results:[],status:'ativo',createdAt:new Date().toISOString()};
@@ -325,7 +342,7 @@ app.get('/api/bolao/:id/public-dashboard',(req,res)=>{
   const publicTicket=t=>({id:t.id,name:t.name,seller:t.seller,picks:t.picks,score:t.score,
     firstScore:t.firstScore,king:t.king,kingWinner:t.kingWinner,hits:t.hits});
   res.json({bolao,draws:bolaoDraws(bolao),revenue:dashboard.revenue,complete:dashboard.complete,
-    maxFirst:dashboard.maxFirst,maxScore:dashboard.maxScore,pools:dashboard.pools,
+    maxFirst:dashboard.maxFirst,maxScore:dashboard.maxScore,pools:dashboard.pools,kingCarry:dashboard.kingCarry,
     leaders:[...dashboard.tickets].sort((a,b)=>b.score-a.score||b.firstScore-a.firstScore).slice(0,50).map(publicTicket),
     winners:{first:dashboard.winners.first.map(publicTicket),main:dashboard.winners.main.map(publicTicket),
       zero:dashboard.winners.zero.map(publicTicket),king:dashboard.winners.king.map(publicTicket)}});
@@ -846,6 +863,8 @@ async function initDatabase(){
       bolao.results=bolao.results||[];
       bolao.percentages=bolao.percentages||{seller:10,main:35,first:15,zero:10,king:10,house:20};
     }
+    [...state.boloes].sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)))
+      .forEach((bolao,index)=>{bolao.contestNumber=Number(bolao.contestNumber)||index+1;});
     for(const p of state.payments){
       const c=state.campaigns.find(c=>c.id===p.campaignId);
       p.expiresAt=p.expiresAt||c?.reservations?.[p.numbers?.[0]]?.expiresAt||Date.parse(p.createdAt)+15*60*1000;
