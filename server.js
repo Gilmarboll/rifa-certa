@@ -318,6 +318,18 @@ app.get('/api/bolao-ticket/:id',(req,res)=>{
   if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
   res.json({ticket:{...ticket,...scoreBolaoTicket(ticket,bolao)},bolao,draws:bolaoDraws(bolao)});
 });
+app.get('/api/bolao/:id/public-dashboard',(req,res)=>{
+  const db=load(),bolao=(db.boloes||[]).find(b=>b.id===req.params.id);
+  if(!bolao) return res.status(404).json({error:'Bolão não encontrado.'});
+  const dashboard=bolaoDashboard(db,bolao);
+  const publicTicket=t=>({id:t.id,name:t.name,seller:t.seller,picks:t.picks,score:t.score,
+    firstScore:t.firstScore,king:t.king,kingWinner:t.kingWinner,hits:t.hits});
+  res.json({bolao,draws:bolaoDraws(bolao),revenue:dashboard.revenue,complete:dashboard.complete,
+    maxFirst:dashboard.maxFirst,maxScore:dashboard.maxScore,pools:dashboard.pools,
+    leaders:[...dashboard.tickets].sort((a,b)=>b.score-a.score||b.firstScore-a.firstScore).slice(0,50).map(publicTicket),
+    winners:{first:dashboard.winners.first.map(publicTicket),main:dashboard.winners.main.map(publicTicket),
+      zero:dashboard.winners.zero.map(publicTicket),king:dashboard.winners.king.map(publicTicket)}});
+});
 app.get('/api/campaign/:id',(req,res)=>{
   const db=load();
   const c=db.campaigns.find(x=>x.id===req.params.id);
