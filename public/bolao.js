@@ -10,6 +10,7 @@ function renderPicks(){
 }
 function renderGames(){
   $('games').innerHTML=games.length?games.map((game,i)=>`<div class="saved-game"><b>Cartela ${i+1}</b><span>${game.map(g=>String(g).padStart(2,'0')).join(', ')}</span><button class="secondary" data-remove="${i}">Remover</button></div>`).join(''):'<p>Nenhuma cartela adicionada.</p>';
+  $('gamesCount').textContent=games.length;
   $('total').textContent=bolao?money(bolao.price*games.length):money(0);
   $('continue').disabled=!games.length||bolao?.closed;
   document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{games.splice(Number(b.dataset.remove),1);renderGames();});
@@ -27,8 +28,12 @@ async function init(){
   const r=await fetch('/api/bolao/'+encodeURIComponent(id||''));
   if(!r.ok){$('title').textContent='Bolão não disponível';return;}
   bolao=await r.json();$('title').textContent=bolao.title;
-  const savedIds=JSON.parse(localStorage.getItem('bolaoTickets:'+bolao.id)||'[]');
-  if(savedIds.length){$('myTickets').hidden=false;$('myTickets').href='/meus-bilhetes-bolao.html?ids='+encodeURIComponent(savedIds.join(','));}
+  const storageKey='bolaoTickets:'+bolao.id;
+  const savedIds=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  $('myTickets').onclick=()=>{
+    if(!savedIds.length){$('msg').textContent='Nenhuma cartela foi guardada neste aparelho ainda.';return;}
+    location.href='/meus-bilhetes-bolao.html?ids='+encodeURIComponent(savedIds.join(','));
+  };
   $('info').textContent=`Bilhete ${money(bolao.price)} • fecha ${bolao.date.split('-').reverse().join('/')} às ${bolao.closeTime}`;
   $('groups').innerHTML=groupNames.map((name,i)=>`<button class="ticket bolao-group" data-g="${i+1}">${String(i+1).padStart(2,'0')}<br><small>${name}</small></button>`).join('');
   document.querySelectorAll('.bolao-group').forEach(b=>b.onclick=()=>choose(Number(b.dataset.g)));
@@ -51,9 +56,9 @@ async function init(){
     });
     const data=await response.json();
     if(!response.ok){$('msg').textContent=data.error||'Não foi possível gerar o bilhete.';return;}
-    const ids=data.tickets.map(t=>t.id).join(',');
-    localStorage.setItem('bolaoTickets:'+bolao.id,JSON.stringify(data.tickets.map(t=>t.id)));
-    location.href='/meus-bilhetes-bolao.html?ids='+encodeURIComponent(ids);
+    const newIds=data.tickets.map(t=>t.id),allIds=[...new Set([...savedIds,...newIds])];
+    localStorage.setItem(storageKey,JSON.stringify(allIds));
+    location.href='/meus-bilhetes-bolao.html?ids='+encodeURIComponent(allIds.join(','));
   };
   if(bolao.closed){$('msg').textContent='Este bolão já está fechado.';$('random').disabled=true;}
   renderPicks();renderGames();
