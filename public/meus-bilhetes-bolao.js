@@ -26,8 +26,8 @@ async function init(){
   if(!items.length){$('customerPanel').innerHTML='<h1>Bilhetes não encontrados</h1>';return;}
   const bolao=items[0].bolao,dr=await fetch('/api/bolao/'+encodeURIComponent(bolao.id)+'/public-dashboard'),dash=dr.ok?await dr.json():null;
   const draws=dash?.draws||items[0].draws||[],p=dash?.pools||{};
-  $('customerPanel').innerHTML=`<div class="customer-hero"><span class="badge">${esc(bolao.status==='encerrado'?'ENCERRADO':'EM ANDAMENTO')}</span><h1>${esc(bolao.title)}</h1><p>${date(bolao.date)} • ${items.length} cartela(s) • ${money(items.reduce((s,d)=>s+Number(d.ticket.amount||0),0))}</p></div>
-  <h2 class="center-title">🏆 Prêmios do bolão</h2><div class="customer-prizes">${prizeCard('Primeiro sorteio','Líder',p.first)}${prizeCard('Rei da Selva','Primeiro sorteio',p.king)}${prizeCard('Mais pontos','Último sorteio',p.main)}${prizeCard('Zero pontos','Último sorteio',p.zero)}</div>
+  $('customerPanel').innerHTML=`<div class="customer-hero"><span class="contest-label">Concurso ${String(bolao.contestNumber||1).padStart(3,'0')}</span><span class="badge">${esc(bolao.status==='encerrado'?'ENCERRADO':'EM ANDAMENTO')}</span><h1>${esc(bolao.title)}</h1><p>${date(bolao.date)} • ${items.length} cartela(s) • ${money(items.reduce((s,d)=>s+Number(d.ticket.amount||0),0))}</p></div>
+  <h2 class="center-title">🏆 Prêmios do bolão</h2><div class="customer-prizes">${prizeCard('Primeiro sorteio','Líder',p.first)}${prizeCard('Rei da Selva',dash?.kingCarry>0?'Prêmio acumulado':'Primeiro sorteio',p.king)}${prizeCard('Mais pontos','Último sorteio',p.main)}${prizeCard('Zero pontos','Último sorteio',p.zero)}</div>
   <section class="customer-section"><h2>Resultados</h2>${draws.length?`<div class="draw-table">${draws.map(d=>`<article><b>${esc(d.time)}</b><span>${d.groups.map(fmt).join(' - ')}</span></article>`).join('')}</div>`:'<p>Aguardando o primeiro resultado.</p>'}</section>
   ${winnerRows('Líderes atuais',dash?.leaders?.slice(0,10),0,'score',false)}
   ${winnerRows('Ganhadores do primeiro sorteio',dash?.winners?.first,p.first,'firstScore')}
